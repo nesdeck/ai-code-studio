@@ -1445,7 +1445,8 @@
                 const conv = conversations.find(c => c.id === currentConversationId);
                 if (!conv) return;
 
-                if (currentConversationId && !currentConversationId.startsWith('conv_')) {
+                // Ensure currentConversationId is a string before using startsWith
+                if (currentConversationId && typeof currentConversationId === 'string' && !currentConversationId.startsWith('conv_')) {
                     await supabase
                         .from('chats')
                         .update({ messages: conv.messages })
@@ -1533,7 +1534,7 @@
                     }
                 }
                 renderChatHistory();
-                if (!id.startsWith('conv_')) {
+                if (id && typeof id === 'string' && !id.startsWith('conv_')) {
                     supabase.from('chats').delete().eq('id', id);
                 }
             }
@@ -2218,6 +2219,21 @@
                     <span class="attachment-chip">
                         <i class="fas fa-file"></i> ${f.name}
                         <i class="fas fa-times" onclick="window.removeAttachment(${i})"></i>
+                    </span>
+                `).join('');
+            }
+            window.removeAttachment = (index) => {
+                attachments.splice(index, 1);
+                updateAttachmentPreview();
+            };
+
+            // Start everything
+            init();
+        })();
+    </script>
+</body>
+</html>
+```-times" onclick="window.removeAttachment(${i})"></i>
                     </span>
                 `).join('');
             }
