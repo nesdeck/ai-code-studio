@@ -663,7 +663,6 @@
             text-align: center;
             margin-bottom: 8px;
         }
-        .register-modal-content input[type="text"],
         .register-modal-content input[type="email"],
         .register-modal-content input[type="password"] {
             width: 100%;
@@ -1014,7 +1013,7 @@
     <div id="profile-modal">
         <div class="profile-modal-content">
             <h2>Profile</h2>
-            <div class="profile-info" id="profile-username"></div>
+            <div class="profile-info" id="profile-email"></div>
             <button class="logout-btn" id="profile-logout-btn">Logout</button>
             <button id="profile-close-btn" style="background-color: #6c757d;">Close</button>
         </div>
@@ -1026,7 +1025,6 @@
             <span class="close-modal" id="close-register">&times;</span>
             <h2>Create Account</h2>
             <input type="email" id="reg-email" placeholder="Email" required>
-            <input type="text" id="reg-username" placeholder="Username" required>
             <input type="password" id="reg-password" placeholder="Password" required>
             <input type="password" id="reg-confirm-password" placeholder="Confirm Password" required>
             <div class="checkbox-row">
@@ -1053,7 +1051,6 @@
 
             // ----- STATE -----
             let currentUser = null;
-            let currentUsername = null;
             let conversations = [];
             let currentConversationId = null;
             let attachments = [];
@@ -1091,7 +1088,7 @@
             const colorDropdown = document.getElementById('color-dropdown');
             const colorSwatches = document.querySelectorAll('.color-swatch');
             const profileModal = document.getElementById('profile-modal');
-            const profileUsername = document.getElementById('profile-username');
+            const profileEmail = document.getElementById('profile-email');
             const profileLogoutBtn = document.getElementById('profile-logout-btn');
             const profileCloseBtn = document.getElementById('profile-close-btn');
             const modelSelect = document.getElementById('model-select');
@@ -1100,7 +1097,6 @@
             const closeRegister = document.getElementById('close-register');
             const registerSubmit = document.getElementById('register-submit');
             const regEmail = document.getElementById('reg-email');
-            const regUsername = document.getElementById('reg-username');
             const regPassword = document.getElementById('reg-password');
             const regConfirm = document.getElementById('reg-confirm-password');
             const regTos = document.getElementById('reg-tos');
@@ -1117,7 +1113,7 @@
 
                 const { data, error } = await supabase
                     .from('profiles')
-                    .select('coin_balance, username')
+                    .select('coin_balance')
                     .eq('id', user.id)
                     .single();
 
@@ -1127,7 +1123,6 @@
                 }
 
                 creditBalance = data.coin_balance;
-                currentUsername = data.username;
                 updateCreditDisplay();
 
                 supabase
@@ -1139,7 +1134,6 @@
                         filter: `id=eq.${user.id}`
                     }, (payload) => {
                         creditBalance = payload.new.coin_balance;
-                        currentUsername = payload.new.username;
                         updateCreditDisplay();
                     })
                     .subscribe();
@@ -1216,7 +1210,7 @@
                 }
             }
 
-            // ----- LOGIN SYSTEM (username + password, with email fallback) -----
+            // ----- LOGIN SYSTEM (email + password only) -----
             function isLoggedIn() {
                 return currentUser !== null;
             }
@@ -1228,7 +1222,7 @@
                 loginContainer.id = 'chat-login-form';
                 loginContainer.innerHTML = `
                     <h2>Login to Chat</h2>
-                    <input type="text" id="login-username-input" placeholder="Username or Email" autofocus>
+                    <input type="email" id="login-email-input" placeholder="Email" autofocus>
                     <input type="password" id="login-password-input" placeholder="Password">
                     <button id="login-submit-btn">Login</button>
                     <div class="create-account-link" id="login-create-account">Create account</div>
@@ -1237,49 +1231,21 @@
                 chatMessagesDiv.appendChild(loginContainer);
 
                 document.getElementById('login-submit-btn').addEventListener('click', async () => {
-                    const loginInput = document.getElementById('login-username-input').value.trim();
+                    const email = document.getElementById('login-email-input').value.trim();
                     const password = document.getElementById('login-password-input').value;
 
-                    if (!loginInput || !password) {
-                        document.getElementById('login-error').textContent = 'Username/Email and password required.';
+                    if (!email || !password) {
+                        document.getElementById('login-error').textContent = 'Email and password required.';
                         return;
                     }
 
-                    let email = null;
-
-                    // Check if input looks like an email
-                    const isEmail = loginInput.includes('@') && loginInput.includes('.');
-                    if (isEmail) {
-                        email = loginInput;
-                        console.log('Logging in with email:', email);
-                    } else {
-                        // Treat as username – look up email in profiles
-                        console.log('Looking up email for username:', loginInput);
-                        const { data: profile, error: profileError } = await supabase
-                            .from('profiles')
-                            .select('email')
-                            .eq('username', loginInput)
-                            .maybeSingle();
-
-                        if (profileError) {
-                            console.error('Profile lookup error:', profileError);
-                        }
-                        if (!profile) {
-                            document.getElementById('login-error').textContent = 'Invalid username or password.';
-                            return;
-                        }
-                        email = profile.email;
-                        console.log('Found email:', email);
-                    }
-
-                    // Now log in with that email
                     const { data, error } = await supabase.auth.signInWithPassword({
                         email,
                         password
                     });
 
                     if (error) {
-                        document.getElementById('login-error').textContent = 'Invalid username or password.';
+                        document.getElementById('login-error').textContent = 'Invalid email or password.';
                         console.error('Login error:', error);
                         return;
                     }
@@ -1307,7 +1273,7 @@
 
             async function logout() {
                 await supabase.auth.signOut();
-                profileModal.classList.remove('show'); // Close modal
+                profileModal.classList.remove('show');
             }
 
             function updateLoginUI() {
@@ -1315,7 +1281,7 @@
                     if (user) {
                         currentUser = user;
                         loginBtn.innerHTML = '<i class="fas fa-user-check"></i>';
-                        loginBtn.title = `Logged in as ${currentUsername || user.email}`;
+                        loginBtn.title = `Logged in as ${user.email}`;
                         messageInput.disabled = false;
                         sendBtn.disabled = false;
                         attachBtn.disabled = false;
@@ -1324,7 +1290,6 @@
                         loadConversations();
                     } else {
                         currentUser = null;
-                        currentUsername = null;
                         loginBtn.innerHTML = '<i class="fas fa-user"></i>';
                         loginBtn.title = 'Login';
                         messageInput.disabled = true;
@@ -1343,16 +1308,15 @@
 
             function showProfileModal() {
                 if (!currentUser) return;
-                profileUsername.textContent = `Username: ${currentUsername || 'unknown'}`;
+                profileEmail.textContent = `Email: ${currentUser.email}`;
                 profileModal.classList.add('show');
             }
 
-            // ----- REGISTRATION MODAL (with upsert) -----
+            // ----- REGISTRATION MODAL -----
             function openRegisterModal() {
                 registerModal.classList.add('show');
                 registerError.textContent = '';
                 regEmail.value = '';
-                regUsername.value = '';
                 regPassword.value = '';
                 regConfirm.value = '';
                 regTos.checked = false;
@@ -1364,12 +1328,11 @@
 
             async function handleRegister() {
                 const email = regEmail.value.trim();
-                const username = regUsername.value.trim();
                 const password = regPassword.value;
                 const confirm = regConfirm.value;
                 const tos = regTos.checked;
 
-                if (!email || !username || !password || !confirm) {
+                if (!email || !password || !confirm) {
                     registerError.textContent = 'All fields are required.';
                     return;
                 }
@@ -1386,7 +1349,6 @@
                     return;
                 }
 
-                // Sign up with Supabase
                 const { data, error } = await supabase.auth.signUp({
                     email,
                     password
@@ -1397,29 +1359,9 @@
                     return;
                 }
 
-                // Use upsert to create or update the profile with username and email
-                if (data.user) {
-                    const { error: upsertError } = await supabase
-                        .from('profiles')
-                        .upsert({ 
-                            id: data.user.id,
-                            username: username,
-                            email: email,
-                            coin_balance: 1000
-                        }, { onConflict: 'id' });
-
-                    if (upsertError) {
-                        console.error('Error upserting profile:', upsertError);
-                        registerError.textContent = 'Account created but profile setup failed. Please contact support.';
-                        return;
-                    } else {
-                        console.log('Profile upserted successfully for user:', data.user.id);
-                    }
-                }
-
                 alert('Registration successful! Please check your email to confirm (or log in if email confirmation is disabled).');
                 closeRegisterModal();
-                showLoginForm(); // Switch back to login
+                showLoginForm();
             }
 
             // ----- CONVERSATIONS -----
@@ -1648,7 +1590,20 @@
                     });
                 });
                 document.addEventListener('click', (e) => {
+                    if (!colorPickerBtn.contains(e.target) && !colorDropdown.contains(e.target {
                     if (!colorPickerBtn.contains(e.target) && !colorDropdown.contains(e.target)) {
+                        colorDropdown.classList.remove('show');
+                    }
+                });
+
+                // Registration modal
+                closeRegister.addEventListener('click', closeRegisterModal);
+                window.addEventListener('click', (e) => {
+                    if (e.target === registerModal) {
+                        closeRegisterModal();
+                    }
+                });
+                register)) {
                         colorDropdown.classList.remove('show');
                     }
                 });
@@ -1662,163 +1617,325 @@
                 });
                 registerSubmit.addEventListener('click', handleRegister);
 
-                [regEmail, regUsername, regPassword, regConfirm].forEach(field => {
+                [regEmail, regPassword, regConfirm].forEachSubmit.addEventListener('click', handleRegister);
+
+                [regEmail, regPassword, regConfirm].forEach(field => {
+                    field.addEventListener('keypress', (e) => {
+                        if (e(field => {
                     field.addEventListener('keypress', (e) => {
                         if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handle.key === 'Enter') {
                             e.preventDefault();
                             handleRegister();
                         }
                     });
                 });
 
+Register();
+                        }
+                    });
+                });
+
                 // Code block buttons delegation
-                chatMessagesDiv.addEventListener('click', (e) => {
-                    const btn = e.target.closest('button');
-                    if (!btn) return;
+                               // Code block buttons delegation
+                chatMessages chatMessagesDiv.addEventListener('click', (e) => {
+Div.addEventListener('click', (e) => {
+                    const btn = e.target.closest                    const btn = e.target.closest('button('button');
+                   ');
+                    if (!btn) if (!btn) return;
 
-                    const container = btn.closest('.code-block-container');
-                    if (!container) return;
+ return;
 
-                    const codeElement = container.querySelector('.code-block-content pre code');
-                    if (!codeElement) return;
-                    const codeText = codeElement.textContent || '';
+                    const                    const container = btn.cl container = btn.closest('.osest('.code-block-container');
+code-block-container');
+                    if                    if (!container) return (!container) return;
 
-                    if (btn.classList.contains('copy-code-btn')) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(codeText).then(() => {
-                            const originalText = btn.innerHTML;
-                            btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-                            setTimeout(() => {
+                    const code;
+
+                    const codeElement =Element = container.querySelector('.code container.querySelector('.code-block-content-block-content pre code');
+                    pre code');
+                    if (!codeElement if (!codeElement) return;
+                    const code) return;
+                    const codeText = codeElement.textContentText = codeElement.textContent || '';
+
+                    || '';
+
+                    if (btn.classList if (btn.classList.contains('copy-code-btn')).contains('copy-code-btn')) {
+                        {
+                        e.preventDefault e.preventDefault();
+                        e.stop();
+                        e.stopPropagationPropagation();
+                       ();
+                        navigator.clip navigator.clipboard.writeboard.writeText(codeText).Text(codeText).then(() => {
+then(() => {
+                            const originalText                            const originalText = btn.innerHTML;
+ = btn.innerHTML;
+                            btn.innerHTML = '<i                            btn.innerHTML = '<i class=" class="fas fa-check"></fas fa-check"></i> Copiedi> Copied!';
+                            setTimeout!';
+                            setTimeout(() =>(() => {
+                                btn.innerHTML {
                                 btn.innerHTML = originalText;
-                            }, 2000);
+ = originalText;
+                            }, 200                            }, 2000);
+                        }).catch(()0);
                         }).catch(() => {
-                            const textarea = document.createElement('textarea');
-                            textarea.value = codeText;
-                            textarea.style.position = 'fixed';
-                            textarea.style.opacity = '0';
-                            document.body.appendChild(textarea);
+                            const textarea => {
+                            const textarea = document.createElement(' = document.createElement('textarea');
+textarea');
+                            textarea.value                            textarea.value = codeText;
+ = codeText;
+                            textarea.style.position =                            textarea.style.position = 'fixed';
+                            'fixed';
+                            textarea textarea.style.opacity =.style.opacity = '0';
+                            '0';
+                            document.body.appendChild(text document.body.appendChild(textarea);
+                            textarea.selectarea);
                             textarea.select();
+                            document.exec();
                             document.execCommand('copy');
+                            documentCommand('copy');
                             document.body.removeChild(textarea);
+                            const originalText.body.removeChild(textarea);
                             const originalText = btn.innerHTML;
                             btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
                             setTimeout(() => {
                                 btn.innerHTML = originalText;
                             }, 2000);
                         });
+                    } else if = btn.innerHTML;
+                            btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                            setTimeout(() => {
+                                btn.innerHTML = originalText;
+                            }, 2000);
+                        });
                     } else if (btn.classList.contains('download-code-btn')) {
+ (btn.classList.contains('download-code-btn')) {
                         e.preventDefault();
                         e.stopPropagation();
                         const blob = new Blob([codeText], { type: 'text/plain' });
+                        const url = URL.create                        e.preventDefault();
+                        e.stopPropagation();
+                        const blob = new Blob([codeText], { type: 'text/plain' });
                         const url = URL.createObjectURL(blob);
+                        const a = document.createElement('aObjectURL(blob);
                         const a = document.createElement('a');
+                        a.href = url;
+');
                         a.href = url;
                         a.download = 'code.txt';
                         a.click();
+                        URL.revokeObjectURL(url                        a.download = 'code.txt';
+                        a.click();
                         URL.revokeObjectURL(url);
-                    } else if (btn.classList.contains('export-code-btn')) {
+                    } else);
+                    } else if (btn.classList.contains(' if (btn.classList.contains('export-code-btn'))export-code-btn')) {
+                        e.preventDefault {
                         e.preventDefault();
-                        e.stopPropagation();
-                        if (codeEditor) {
-                            codeEditor.setValue(codeText);
-                            codeEditor.focus();
+                       ();
+                        e.stopPropagation e.stopPropagation();
+                        if (();
+                        if (codeEditorcodeEditor) {
+                            codeEditor.set) {
+                            codeEditor.setValue(codeValue(codeText);
+                            codeText);
+                            codeEditor.fEditor.focus();
                         }
+ocus();
+                        }
+                    }
+                });
                     }
                 });
             }
 
-            // ----- FILE UPLOAD HANDLER -----
-            function handleFileUpload(e) {
-                const file = e.target.files[0];
-                if (!file) return;
+            // ----- FILE            }
+
+            // ----- FILE UPL UPLOAD HANDLER -----
+OAD HANDLER -----
+            function            function handleFile handleFileUpload(e) {
+Upload(e) {
+                const file =                const file = e.target e.target.files[0.files[0];
+];
+                if (!                if (!file)file) return;
+
+                const return;
 
                 const reader = new FileReader();
-                reader.onload = (event) => {
-                    const content = event.target.result;
-                    codeEditor.setValue(content);
-                    setExtensionFromFilename(file.name);
+ reader = new FileReader();
+                reader                reader.onload.onload = (event) = (event) => {
+                    const => {
+                    const content = event.target content = event.target.result;
+                    codeEditor.set.result;
+                    codeEditor.setValue(contentValue(content);
+                   );
+                    setExtension setExtensionFromFilename(file.nameFromFilename(file.name);
+               );
                 };
-                reader.readAsText(file);
-                codeUploadInput.value = '';
+                };
+                reader.readAsText reader.readAsText(file);
+                code(file);
+                codeUploadInput.value =UploadInput.value = '';
+            '';
             }
 
-            function setExtensionFromFilename(filename) {
+            function setExtensionFrom }
+
+            function setExtensionFromFilename(filenameFilename(filename) {
+                if) {
                 if (!filename) return;
-                const extMatch = filename.match(/\.[0-9a-z]+$/i);
-                if (extMatch) {
-                    const ext = extMatch[0].toLowerCase();
+                (!filename) return;
+                const ext const extMatch = filename.match(/\Match = filename.match(/\.[0-9.[0-9a-za-z]+$/i);
+]+$/i);
+                if (ext                if (extMatch) {
+                   Match) {
+                    const ext = ext const ext = extMatch[0].toLowerCaseMatch[0].toLowerCase();
+                    let found();
                     let found = false;
-                    for (let i = 0; i < extensionSelect.options.length; i++) {
-                        const opt = extensionSelect.options[i];
-                        if (opt.value === ext) {
+                    = false;
+                    for (let i for (let i = 0; = 0; i < extensionSelect i < extensionSelect.options.length; i.options.length; i++) {
+                        const++) {
+                        const opt = opt = extensionSelect extensionSelect.options[i];
+                        if (.options[i];
+                        if (opt.value === extopt.value === ext) {
+) {
                             extensionSelect.selectedIndex = i;
-                            found = true;
+                            extensionSelect.selectedIndex = i;
+                            found = true                            found = true;
                             break;
                         }
                     }
-                    if (!found) {
-                        extensionSelect.value = 'custom';
-                        customExtensionInput.value = ext;
-                        customExtensionInput.classList.add('show');
+;
+                            break;
+                        }
+                    if                    }
+                    if (!found (!found) {
+                        extension) {
+                        extensionSelect.valueSelect.value = 'custom';
+                        custom = 'custom';
+                        customExtensionInputExtensionInput.value = ext;
+.value = ext;
+                        custom                        customExtensionInputExtensionInput.classList.add.classList.add('show');
+                   ('show');
                     } else {
-                        customExtensionInput.classList.remove('show');
+                        } else {
+                        customExtension customExtensionInput.classList.remove('Input.classList.remove('show');
+                    }
+                }show');
                     }
                 } else {
+                    extensionSelect.value else {
                     extensionSelect.value = '.txt';
-                    customExtensionInput.classList.remove('show');
+                    customExtensionInput = '.txt';
+                    customExtensionInput.classList.remove.classList.remove('show');
+               ('show');
                 }
             }
+            }
 
-            // Helper to get language from class (unchanged)
-            function getLanguageFromClass(className) {
-                if (!className) return 'Code';
-                const match = className.match(/language-(\w+)/);
-                if (match) {
-                    const lang = match[1];
-                    const extensions = {
-                        javascript: '.js',
-                        python: '.py',
+            // Helper }
+
+            // Helper to get to get language from class ( language from class (unchanged)
+           unchanged)
+            function get function getLanguageFromLanguageFromClass(className)Class(className) {
+                {
+                if (!className) if (!className) return ' return 'Code';
+                constCode';
+                const match = className.match match = className.match(/language-(\(/language-(\w+)/);
+w+)/);
+                if (match                if (match) {
+                    const) {
+                    const lang = match lang = match[1];
+[1];
+                    const extensions =                    const extensions = {
+                        {
+                        javascript: '.js javascript: '.js',
+                       ',
+                        python: python: '.py '.py',
+                        html:',
                         html: '.html',
-                        css: '.css',
-                        java: '.java',
-                        cpp: '.cpp',
-                        c: '.c',
+                        css: '.html',
+                        css: '.css '.css',
+                       ',
+                        java: '.java java: '.java',
+                       ',
+                        cpp cpp: '.cpp',
+: '.cpp',
+                        c                        c: '.c',
+                        php: '.c',
                         php: '.php',
+                        ruby: '.php',
                         ruby: '.rb',
-                        go: '.go',
-                        rust: '.rs',
+: '.rb',
+                        go: '.                        go: '.go',
+                        rustgo',
+                        rust: '.: '.rs',
+rs',
                         swift: '.swift',
+                                               swift: '.swift',
                         kotlin: '.kt',
-                        typescript: '.ts',
-                        markdown: '.md',
+ kotlin: '.kt',
+                        typescript:                        typescript: '.ts',
+                        '.ts',
+                        markdown: '. markdown: '.md',
+                        json: '.md',
                         json: '.json',
+                        xmljson',
                         xml: '.xml',
-                        yaml: '.yml',
+: '.xml',
+                        yaml:                        yaml: '. '.yml',
+                        sql:yml',
                         sql: '.sql',
-                        bash: '.sh',
+                        '.sql',
+                        bash: '.sh bash: '.sh',
+                       ',
                         shell: '.sh'
+                    shell: '.sh'
                     };
-                    const ext = extensions[lang] || '.txt';
-                    return lang.charAt(0).toUpperCase() + lang.slice(1) + ' ' + ext;
+                    const ext = extensions };
+                    const ext = extensions[lang] ||[lang] || '.txt '.txt';
+                    return lang';
+                    return lang.charAt(0)..charAt(0).toUpperCasetoUpperCase() + lang.slice() + lang.slice(1(1) + ' ' + ext;
+               ) + ' ' + ext;
+                }
                 }
                 return 'Code';
+ return 'Code';
             }
 
-            // ----- SIDEBAR COLLAPSE (unchanged) -----
-            function toggleSidebar() {
-                sidebar.classList.toggle('collapsed');
-                const isCollapsed = sidebar.classList.contains('collapsed');
+            }
+
+            //            // ----- S ----- SIDEBAR COLLAPSEIDEBAR COLLAPSE (unchanged) (unchanged) -----
+ -----
+            function            function toggleSidebar() toggleSidebar() {
+                {
+                sidebar.classList sidebar.classList.toggle('coll.toggle('collapsed');
+                const isCollapsed');
+                const isCollapsed =apsed = sidebar.classList sidebar.classList.contains('collapsed');
+                localStorage.set.contains('collapsed');
                 localStorage.setItem('sidebarCollapsed', isCollapsed);
-                const icon = collapseBtn.querySelector('i');
+Item('sidebarCollapsed', isCollapsed);
+                const icon =                const icon = collapseBtn collapseBtn.querySelector('.querySelector('i');
+                if (isCollapsedi');
                 if (isCollapsed) {
-                    icon.classList.remove('fa-chevron-left');
-                    icon.classList.add('fa-chevron-right');
+) {
+                    icon.classList.remove                    icon.classList.remove('fa-chev('fa-chevron-left');
+                   ron-left');
+                    icon.classList.add('fa-chevron icon.classList.add('fa-chevron-right');
                 } else {
-                    icon.classList.remove('fa-chevron-right');
+-right');
+                } else {
+                    icon.classList.remove                    icon.classList.remove('fa-chevron-right');
+                    icon.classList.add('fa-chevron-left');
+                }
+                const onTransition('fa-chevron-right');
                     icon.classList.add('fa-chevron-left');
                 }
                 const onTransitionEnd = () => {
+                    if (!isDragging) applyChatRatio();
+                    sidebar.removeEventListener('transitionend', onTransitionEnd);
+                };
+                sidebar.addEventListener('transitionendEnd = () => {
                     if (!isDragging) applyChatRatio();
                     sidebar.removeEventListener('transitionend', onTransitionEnd);
                 };
@@ -1828,7 +1945,18 @@
                 }, 250);
             }
             function loadSidebarState() {
-                const collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+                const collapsed = localStorage.getItem('sidebar', onTransitionEnd);
+                setTimeout(() => {
+                    if (!isDragging) applyChatRatio();
+                }, 250);
+            }
+            function loadSidebarState() {
+                const collapsed = localStorage.getItem('sidebarCollapsed') === 'trueCollapsed') === 'true';
+                if (collapsed) {
+                    sidebar.classList.add('collapsed');
+                    const icon = collapseBtn.querySelector('i');
+                    icon.classList.remove('fa-chevron-left');
+                    icon.classList';
                 if (collapsed) {
                     sidebar.classList.add('collapsed');
                     const icon = collapseBtn.querySelector('i');
@@ -1837,109 +1965,221 @@
                 }
             }
 
+            //.add('fa-chevron-right');
+                }
+            }
+
             // ----- RESIZING (unchanged) -----
-            let startX, startLeftWidth, startRightWidth;
+            let startX, startLeftWidth ----- RESIZING (unchanged) -----
+            let startX, startLeftWidth, start, startRightWidth;
+            function startResize(e) {
+                e.preventDefault();
+                isDraRightWidth;
             function startResize(e) {
                 e.preventDefault();
                 isDragging = true;
+                if (egging = true;
                 if (e.type === 'touchstart') {
-                    startX = e.touches[0].clientX;
+                    startX.type === 'touchstart') {
+                    startX = e.touches[0]. = e.touches[0].clientX;
                 } else {
-                    startX = e.clientX;
+                   clientX;
+                } else {
+                    startX startX = e.clientX;
+                }
+                startLeft = e.clientX;
                 }
                 startLeftWidth = chatPanel.offsetWidth;
-                startRightWidth = editorPanel.offsetWidth;
-                divider.classList.add('dragging');
-                document.addEventListener('mousemove', onMouseMove);
+Width = chatPanel.offsetWidth;
+                start                startRightWidth = editorPanel.RightWidth = editorPanel.offsetWidthoffsetWidth;
+                divider.classList;
+                divider.classList.add('.add('dragging');
+               dragging');
+                document.addEventListener('mousemove', onMouseMove document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('touchmove', onMouseMove, { passive: false });
+                document.addEventListener('mouseup', stopResize);
+                document.addEventListener('touchend', stopRes);
                 document.addEventListener('touchmove', onMouseMove, { passive: false });
                 document.addEventListener('mouseup', stopResize);
                 document.addEventListener('touchend', stopResize);
+                document.body.style.cize);
                 document.body.style.cursor = 'col-resize';
-                document.body.style.userSelect = 'none';
+                document.bodyursor = 'col-resize';
+                document.body.style.user.style.userSelect = 'none';
+                chatPanel.style.pointerSelect = 'none';
                 chatPanel.style.pointerEvents = 'none';
-                editorPanel.style.pointerEvents = 'none';
+               Events = 'none';
+                editorPanel editorPanel.style.pointerEvents =.style.pointerEvents = 'none 'none';
             }
-            function onMouseMove(e) {
-                if (!isDragging) return;
-                e.preventDefault();
+           ';
+            }
+            function on function onMouseMove(e)MouseMove(e) {
+                {
+                if (!isDra if (!isDragging)gging) return;
+                e return;
+.preventDefault();
+                let clientX                e.preventDefault();
                 let clientX;
-                if (e.type === 'touchmove') {
-                    clientX = e.touches[0].clientX;
+                if (;
+                if (e.typee.type === ' === 'touchmove') {
+                    clienttouchmove') {
+                    clientX = e.touches[0].clientX = e.touches[0].clientX;
+                }X;
                 } else {
-                    clientX = e.clientX;
+ else {
+                    client                    clientX = e.clientX;
+X = e.clientX;
                 }
-                const dx = clientX - startX;
-                const newLeft = startLeftWidth + dx;
-                const newRight = startRightWidth - dx;
-                if (newLeft >= 300 && newRight >= 300) {
-                    setChatEditorWidths(newLeft, newRight);
+                const                }
+                const dx = clientX - start dx = clientX - startX;
+X;
+                const newLeft                const newLeft = start = startLeftWidth + dxLeftWidth + dx;
+                const new;
+                const newRight = startRightRight = startRightWidth - dx;
+                ifWidth - dx;
+                if (new (newLeft >= 300Left >= 300 && newRight >= && newRight >= 300) {
+ 300) {
+                    setChatEditor                    setChatEditorWidths(newLeftWidths(newLeft, new, newRight);
+                }
+Right);
                 }
             }
-            function stopResize() {
-                if (!isDragging) return;
-                isDragging = false;
+            function            }
+            function stopRes stopResize()ize() {
+                {
+                if (!isDra if (!isDragging) return;
+gging) return;
+                isDragging                isDragging = false;
+                = false;
                 divider.classList.remove('dragging');
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('touchmove', onMouseMove);
-                document.removeEventListener('mouseup', stopResize);
-                document.removeEventListener('touchend', stopResize);
-                document.body.style.cursor = '';
-                document.body.style.userSelect = '';
-                chatPanel.style.pointerEvents = '';
-                editorPanel.style.pointerEvents = '';
-                updateRatioFromWidths();
+                divider.classList.remove('dragging');
+                document.removeEventListener(' document.removeEventListener('mousmousemove', onMouseMoveemove', onMouseMove);
+               );
+                document.removeEventListener(' document.removeEventListener('touchmovetouchmove', on', onMouseMove);
+               MouseMove);
+                document.removeEventListener(' document.removeEventListener('mouseup', stopmouseup', stopResizeResize);
+               );
+                document.removeEventListener(' document.removeEventListener('toutouchend',chend', stopResize);
+                document stopResize);
+                document.body.style.cursor.body.style.cursor = '';
+                document = '';
+                document.body.style.body.style.userSelect = '';
+.userSelect = '';
+                chat                chatPanel.style.poPanel.style.pointerEventsinterEvents = '';
+                editor = '';
+                editorPanel.stylePanel.style.po.pointerEventsinterEvents = '';
+                update = '';
+                updateRatioFromRatioFromWidths();
+           Widths();
             }
-            function setChatEditorWidths(chatW, editorW) {
-                chatPanel.style.flex = 'none';
-                editorPanel.style.flex = 'none';
-                chatPanel.style.width = chatW + 'px';
-                editorPanel.style.width = editorW + 'px';
-                localStorage.setItem('chatWidth', chatW);
-                localStorage.setItem('editorWidth', editorW);
             }
-            function updateRatioFromWidths() {
-                const total = chatPanel.offsetWidth + editorPanel.offsetWidth;
-                if (total > 0) {
-                    chatWidthRatio = chatPanel.offsetWidth / total;
-                    localStorage.setItem('chatRatio', chatWidthRatio);
+            function setChatEditor function setChatEditorWidths(chatWidths(chatW, editorWW, editorW) {
+) {
+                chatPanel.style.flex = '                chatPanel.style.flex = 'none';
+                editornone';
+                editorPanel.style.flexPanel.style.flex = 'none';
+ = 'none';
+                chat                chatPanel.stylePanel.style.width = chatW.width = chatW + ' + 'px';
+px';
+                editorPanel.style                editorPanel.style.width =.width = editorW editorW + 'px';
+ + 'px';
+                localStorage                localStorage.setItem('chat.setItem('chatWidth', chatWWidth', chatW);
+                localStorage.set);
+                localStorage.setItem('Item('editorWidth', editorW);
+editorWidth', editorW);
+            }
+            }
+            function updateRatio            function updateRatioFromWidths()FromWidths() {
+                const total {
+                const total = chat = chatPanel.Panel.offsetWidth + editoroffsetWidth + editorPanel.Panel.offsetWidth;
+               offsetWidth;
+                if ( if (total >total > 0) {
+ 0) {
+                    chat                    chatWidthRatioWidthRatio = chatPanel. = chatPanel.offsetWidth / totaloffsetWidth / total;
+                    localStorage.setItem(';
+                    localStorage.setItem('chatRatiochatRatio', chatWidthRatio);
+                }
+            }
+            function apply', chatWidthRatio);
                 }
             }
             function applyChatRatio() {
-                if (isDragging) return;
-                const mainPanel = document.querySelector('.main-panel');
-                const totalWidth = mainPanel.offsetWidth;
-                if (totalWidth === 0) return;
-                const savedRatio = localStorage.getItem('chatRatio');
-                const ratio = savedRatio ? parseFloat(savedRatio) : 0.5;
-                let chatW = Math.round(totalWidth * ratio);
-                let editorW = totalWidth - chatW;
-                if (chatW < 300) {
+ChatRatio() {
+                if                if (is (isDraggingDragging) return;
+               ) return;
+                const main const mainPanel = document.querySelectorPanel = document.querySelector('.main('.main-panel');
+               -panel');
+                const totalWidth = mainPanel const totalWidth = mainPanel.offsetWidth;
+.offsetWidth;
+                if (total                if (totalWidth === 0Width === 0) return;
+               ) return;
+                const saved const savedRatio = localStorage.getItem('chatRatio');
+Ratio = localStorage.getItem('chatRatio');
+                const                const ratio = savedRatio ratio = savedRatio ? parse ? parseFloat(savedRatioFloat(savedRatio)) :  : 0.5;
+0.5;
+                let                let chatW chatW = Math.round(total = Math.round(totalWidth *Width * ratio);
+                let ratio);
+                let editorW editorW = totalWidth - = totalWidth - chatW;
+                chatW;
+                if (chatW <  if (chatW < 300)300) {
+                    chatW =  {
                     chatW = 300;
-                    editorW = totalWidth - 300;
+300;
+                    editorW = totalWidth                    editorW = totalWidth - 300;
+ - 300;
                 }
-                if (editorW < 300) {
-                    editorW = 300;
-                    chatW = totalWidth - 300;
                 }
-                setChatEditorWidths(chatW, editorW);
+                if                if (editorW (editorW < 300 < 300) {
+) {
+                    editorW =                    editorW = 300 300;
+                   ;
+                    chatW = total chatW = totalWidth - 300;
+               Width - 300;
+                }
+                setChatEditorWidths( }
+                setChatEditorWidths(chatWchatW, editorW);
+, editorW);
             }
+            function loadLayout            }
             function loadLayout() {
-                const w1 = localStorage.getItem('chatWidth');
-                const w2 = localStorage.getItem('editorWidth');
-                if (w1 && w2) {
-                    setChatEditorWidths(parseInt(w1), parseInt(w2));
-                } else {
-                    const mainPanel = document.querySelector('.main-panel');
-                    const total = mainPanel.offsetWidth;
-                    setChatEditorWidths(Math.floor(total/2), Math.ceil(total/2));
+                const() {
+                const w1 w1 = localStorage.getItem(' = localStorage.getItem('chatWidth');
+               chatWidth');
+                const w2 = const w2 = localStorage.getItem localStorage.getItem('editorWidth');
+('editorWidth');
+                if (w                if (w1 &&1 && w2) {
+                    set w2) {
+                    setChatEditorWidthsChatEditorWidths(parseInt(w(parseInt(w1),1), parseInt(w2));
+ parseInt(w2));
+                }                } else {
+                    const else {
+                    const mainPanel = document.querySelector('. mainPanel = document.querySelector('.main-panel');
+main-panel');
+                    const total =                    const total = mainPanel mainPanel.offset.offsetWidth;
+                    setWidth;
+                    setChatEditorChatEditorWidths(MathWidths(Math.floor(total/.floor(total/2),2), Math.ceil(total/2 Math.ceil(total/2));
+                }
+                updateRatioFromWidth));
                 }
                 updateRatioFromWidths();
+s();
             }
 
-            // ----- CODEMIRROR -----
+            //            }
+
+            // ----- CO ----- CODEMIRRORDEMIRROR -----
             function initCodeEditor() {
                 const textarea = document.getElementById('code-editor');
-                codeEditor = CodeMirror.fromTextArea(textarea, {
+                code -----
+            function initCodeEditor() {
+                const textarea = document.getElementById('code-editor');
+                codeEditor = CodeMirror.fromTextArea(textarea,Editor = CodeMirror.fromTextArea(textarea, {
+                    lineNumbers: true,
+                    mode: 'javascript',
+                    theme: 'dracula',
+                    autoCloseBrackets: true,
+                    matchBrackets: true,
+                    {
                     lineNumbers: true,
                     mode: 'javascript',
                     theme: 'dracula',
@@ -1948,158 +2188,318 @@
                     indentUnit: 4,
                     tabSize: 4,
                 });
+                codeEditor indentUnit: 4,
+                    tabSize: 4,
+                });
                 codeEditor.setSize('100%', '100%');
             }
 
+            // ----- EDIT.setSize('100%', '100%');
+            }
+
             // ----- EDITOR FEATURES -----
+            function sendCodeOR FEATURES -----
             function sendCodeToChat() {
+                if (!isToChat() {
                 if (!isLoggedIn()) {
+LoggedIn()) {
+                    showLoginForm();
+                    return;
                     showLoginForm();
                     return;
                 }
+                const code = codeEditor                }
                 const code = codeEditor.getValue();
-                messageInput.value = code;
+.getValue();
+                messageInput.value = code                messageInput.value = code;
+                messageInput;
                 messageInput.focus();
-                messageInput.style.height = 'auto';
-                messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+               .focus();
+                messageInput.style.height messageInput.style.height = 'auto';
+ = 'auto';
+                message                messageInput.style.height =Input.style.height = Math.min(messageInput Math.min(messageInput.scrollHeight,.scrollHeight, 120) + 120) + 'px';
+            'px';
             }
-            function clearEditor() {
+            }
+            function clearEditor() function clearEditor() {
+                codeEditor {
                 codeEditor.setValue('');
             }
 
-            // ----- DOWNLOAD -----
-            function handleExtensionChange() {
-                if (extensionSelect.value === 'custom') {
-                    customExtensionInput.classList.add('show');
+           .setValue('');
+            }
+
+            // ----- // ----- DOWNLOAD -----
+            function DOWNLOAD -----
+            function handleExtensionChange() handleExtensionChange() {
+                {
+                if ( if (extensionSelect.value === 'custom') {
+extensionSelect.value === 'custom') {
+                    custom                    customExtensionInputExtensionInput.classList.add('show.classList.add('show');
+               ');
                 } else {
-                    customExtensionInput.classList.remove('show');
+                    customExtensionInput.classList } else {
+                    customExtensionInput.classList.remove('.remove('show');
+                }
+show');
                 }
             }
-            function getSelectedExtension() {
-                if (extensionSelect.value === 'custom') {
-                    let ext = customExtensionInput.value.trim();
-                    if (!ext.startsWith('.')) ext = '.' + ext;
-                    return ext;
+            }
+            function getSelected            function getSelectedExtension() {
+               Extension() {
+                if (extensionSelect if (extensionSelect.value ===.value === 'custom') {
+                    let 'custom') {
+                    let ext = customExtension ext = customExtensionInput.value.trim();
+Input.value.trim();
+                    if (!ext                    if (!ext.startsWith('.'.startsWith('.')) ext = '.')) ext = '.' + ext;
+                    + ext;
+                    return ext return ext;
                 }
-                return extensionSelect.value;
+               ;
+                }
+                return extension return extensionSelect.value;
+           Select.value;
+            }
             }
             function downloadFile() {
-                const content = codeEditor.getValue();
+                function downloadFile() {
+                const content = code const content = codeEditor.getValue();
+                const extEditor.getValue();
                 const ext = getSelectedExtension();
-                const filename = `code${ext}`;
-                const blob = new Blob([content], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
+                const filename = ` = getSelectedExtension();
+                const filename = `code${ext}`code${ext}`;
+                const blob = new Blob;
+                const blob = new Blob([content([content], { type: 'text], { type: 'text/plain' });
+/plain' });
+                const url =                const url = URL.createObjectURL(bl URL.createObjectURL(blob);
+                constob);
+                const a = a = document.createElement('a');
+                document.createElement('a');
+                a.h a.href = url;
+                aref = url;
+                a.download = filename.download = filename;
+                document.body;
                 document.body.appendChild(a);
-                a.click();
+               .appendChild(a);
+                a.click a.click();
+                document.body();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                downloadStatus.textContent = `✅ Downloaded as ${filename}`;
-                setTimeout(() => { downloadStatus.textContent = ''; }, 3000);
+                download.removeChild(a);
+                URL.revokeObjectURL(url);
+                downloadStatus.textContent =Status.textContent = `✅ Downloaded as ${filename}`;
+                setTimeout(() => `✅ Downloaded as ${filename}`;
+                setTimeout(() => { downloadStatus.text { downloadStatus.textContent =Content = ''; },  ''; }, 30003000);
             }
 
-            // ----- CHAT -----
-            async function sendMessage() {
-                if (!isLoggedIn()) {
+           );
+            }
+
+            // ----- // ----- CHAT -----
+ CHAT -----
+            async function sendMessage()            async function sendMessage() {
+                {
+                if (!isLogged if (!isLoggedIn())In()) {
+                    showLoginForm();
+                    return {
                     showLoginForm();
                     return;
+               ;
                 }
 
-                const text = messageInput.value.trim();
-                if (!text && attachments.length === 0) return;
+                const text = message }
 
-                const selectedOption = modelSelect.options[modelSelect.selectedIndex];
-                const requiredCredits = parseInt(selectedOption.dataset.credits, 10);
+                const text =Input.value messageInput.value.trim();
+                if (!text && attachments.trim();
+                if (!text && attachments.length ===.length === 0) return 0) return;
 
-                if (!await deductCredits(requiredCredits)) return;
+               ;
+
+                const selectedOption = const selectedOption = modelSelect modelSelect.options[modelSelect.options[modelSelect.selectedIndex.selectedIndex];
+               ];
+                const requiredCredits const requiredCredits = parseInt = parseInt(selected(selectedOption.dataset.Option.dataset.credits, credits, 10);
+
+                if10);
+
+                if (!await deductCred (!await deductCredits(requiredCredits(requiredCredits)) return;
+
+its)) return;
 
                 const userMsg = {
-                    role: 'user',
+                const userMsg = {
+                    role: '                    role: 'user',
+user',
                     content: text,
-                    timestamp: new Date().toISOString(),
+                    timestamp:                    content: text,
+                    timestamp: new Date().to new Date().toISOString(),
+                    attachments: [...attISOString(),
                     attachments: [...attachments]
+achments]
                 };
-                addMessageToCurrentConversation(userMsg);
+                };
+                addMessageTo                addMessageToCurrentConversCurrentConversation(useration(userMsg);
                 renderMessage(userMsg);
-                messageInput.value = '';
+Msg);
+                renderMessage(userMsg);
+                message                messageInput.value = '';
+Input.value = '';
                 attachments = [];
+                update                attachments = [];
                 updateAttachmentPreview();
+               AttachmentPreview();
                 scrollToBottom();
-                simulateNoApiResponse(selectedOption.textContent);
+ scrollToBottom();
+                simulate                simulateNoApiResponse(NoApiResponse(selectedOptionselectedOption.textContent);
+           .textContent);
             }
 
-            function simulateNoApiResponse(modelName) {
-                showTypingIndicator();
+            function simulate }
+
+            function simulateNoApiResponse(modelNoApiResponse(modelName) {
+                showTypName) {
+                showTypingIndicatoringIndicator();
                 setTimeout(() => {
-                    hideTypingIndicator();
+                    hide();
+                setTimeout(() => {
+                    hideTypingTypingIndicator();
+                    const aiMsgIndicator();
                     const aiMsg = {
-                        role: 'ai',
-                        content: `⚠️ No API connected. Using ${modelName} (demo mode).\n\nHere's an example code block:\n\n\`\`\`javascript\n// Sample code\nfunction greet(name) {\n  return \`Hello, \${name}!\`;\n}\n\nconsole.log(greet('World'));\n\`\`\``,
-                        timestamp: new Date().toISOString()
+                        role = {
+                        role: ': 'ai',
+                        contentai',
+                        content: `: `⚠️ No API⚠️ No API connected. Using ${ connected. Using ${modelNamemodelName} (demo mode} (demo mode).\n\nHere's).\n\nHere's an example an example code block code block:\n\n\:\n\n\`\`\`\`\`javascript\n// Sample code`javascript\n// Sample code\nfunction greet(name\nfunction greet(name) {\n  return \) {\n  return \`Hello, \`Hello, \${name}!\`;\${name}!\`;\n}\n\nn}\n\nconsole.log(greetconsole.log(greet('World'));\n\`('World'));\n\`\`\``\`\``,
+                        timestamp: new Date,
+                        timestamp: new Date().toISOString().toISOString()
+                   ()
                     };
+                    addMessageToCurrentConversation( };
                     addMessageToCurrentConversation(aiMsg);
-                    renderMessage(aiMsg);
+aiMsg);
+                    renderMessage(aiMsg                    renderMessage(aiMsg);
+                   );
                     scrollToBottom();
-                }, 1500);
+                }, scrollToBottom();
+                }, 150 1500);
             }
 
-            function showTypingIndicator() {
-                const div = document.createElement('div');
-                div.id = 'typing-indicator';
-                div.className = 'typing-indicator';
-                div.innerHTML = '<span></span><span></span><span></span>';
-                chatMessagesDiv.appendChild(div);
+0);
+            }
+
+            function            function showTyp showTypingIndicator() {
+ingIndicator() {
+                const                const div = document.createElement div = document.createElement('div');
+               ('div');
+                div.id div.id = 'typing = 'typing-indicator-indicator';
+                div.className =';
+                div.className = 'typing-ind 'typing-indicator';
+                divicator';
+                div.innerHTML = '<span></span.innerHTML = '<span></span><span><span></span><span></span></span><span></span>';
+               >';
+                chatMessages chatMessagesDiv.appendChild(divDiv.appendChild(div);
+                scrollTo);
                 scrollToBottom();
+Bottom();
             }
-            function hideTypingIndicator() {
-                const el = document.getElementById('typing-indicator');
+            function            }
+            function hideTyp hideTypingIndicator() {
+ingIndicator() {
+                const el = document.getElementById                const el = document.getElementById('typing-ind('typing-indicator');
+                if (elicator');
                 if (el) el.remove();
+) el.remove();
             }
 
-            function renderMessage(msg) {
-                const div = document.createElement('div');
-                div.className = `message ${msg.role}`;
-                div.dataset.timestamp = msg.timestamp;
+            }
 
-                let rawHtml = marked.parse(msg.content);
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = rawHtml;
+            function renderMessage(msg)            function renderMessage(msg) {
+                {
+                const div const div = document.createElement('div');
+ = document.createElement('div');
+                div.className                div.className = `message ${ = `message ${msg.msg.role}`;
+                div.datrole}`;
+                div.dataset.timestamp =aset.timestamp = msg.t msg.timestamp;
+
+                letimestamp;
+
+                let rawHtml = marked.parse(msg rawHtml = marked.parse(msg.content);
+.content);
+                const tempDiv                const tempDiv = document.createElement('div');
+                temp = document.createElement('div');
+                tempDiv.innerHTML = rawDiv.innerHTML = rawHtml;
+
+Html;
 
                 tempDiv.querySelectorAll('pre code').forEach(block => {
-                    const pre = block.parentNode;
-                    const className = block.className || '';
-                    const language = getLanguageFromClass(className);
+                    const                tempDiv.querySelectorAll('pre code').forEach(block => {
+                    const pre = pre = block.parentNode;
+                    const block.parentNode;
+                    const className = block className = block.className || '';
+                   .className || '';
+                    const language const language = getLanguageFromClass( = getLanguageFromClass(className);
 
-                    const container = document.createElement('div');
-                    container.className = 'code-block-container';
+className);
 
-                    const header = document.createElement('div');
-                    header.className = 'code-block-header';
+                    const container = document.createElement                    const container = document.createElement('div('div');
+                   ');
+                    container.class container.className = 'code-block-container';
 
-                    const langSpan = document.createElement('span');
-                    langSpan.className = 'code-language';
-                    langSpan.textContent = language;
+                   Name = 'code-block-container';
 
-                    const buttonsDiv = document.createElement('div');
-                    buttonsDiv.className = 'code-buttons';
+                    const header const header = document.createElement('div');
+ = document.createElement('div');
+                    header                    header.className = '.className = 'code-blockcode-block-header';
 
-                    const copyBtn = document.createElement('button');
-                    copyBtn.className = 'copy-code-btn';
-                    copyBtn.innerHTML = '<i class="far fa-copy"></i> Copy';
+                   -header';
 
-                    const downloadBtn = document.createElement('button');
+                    const langSpan = document const langSpan = document.createElement('span');
+                    lang.createElement('span');
+                    langSpan.classSpan.className =Name = 'code-language';
+ 'code-language';
+                    langSpan.text                    langSpan.textContent =Content = language;
+
+ language;
+
+                    const buttonsDiv = document                    const buttonsDiv = document.createElement('.createElement('div');
+                    buttonsDiv.classdiv');
+                    buttonsDiv.className = 'codeName = 'code-butt-buttons';
+
+                    constons';
+
+                    const copyBtn = document.createElement(' copyBtn = document.createElement('button');
+button');
+                    copyBtn.class                    copyBtn.className =Name = 'copy-code-btn';
+                    'copy-code-btn';
+                    copyBtn.innerHTML = copyBtn.innerHTML = '<i class=" '<i class="far fa-copyfar fa-copy"></i"></i> Copy> Copy';
+
+                   ';
+
+                    const downloadBtn = const downloadBtn = document.createElement document.createElement('button('button');
+                    downloadBtn.className = '');
                     downloadBtn.className = 'download-code-btn';
-                    downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download';
+download-code-btn';
+                    download                    downloadBtn.innerHTML =Btn.innerHTML = '<i class '<i class="fas fa-d="fas fa-download"></ownload"></i> Download';
 
-                    const exportBtn = document.createElement('button');
-                    exportBtn.className = 'export-code-btn';
-                    exportBtn.innerHTML = '<i class="fas fa-arrow-right"></i> Export';
+                    consti> Download';
 
-                    buttonsDiv.appendChild(copyBtn);
+                    const exportBtn = document exportBtn = document.createElement('button');
+                    export.createElement('button');
+                    exportBtn.className = 'exportBtn.className = 'export-code-btn';
+                   -code-btn';
+                    exportBtn.innerHTML = exportBtn.innerHTML = '<i class="fas fa '<i class="fas fa-arrow-arrow-right"></i>-right"></i> Export';
+
+ Export';
+
+                    buttons                    buttonsDiv.appendChild(copyDiv.appendChild(copyBtn);
+                    buttonsDiv.appendChildBtn);
                     buttonsDiv.appendChild(downloadBtn);
-                    buttonsDiv.appendChild(exportBtn);
+(downloadBtn);
+                    buttonsDiv.appendChild                    buttonsDiv.appendChild(export(exportBtn);
+
+                    header.appendChild(langSpan);
+                    header.appendChild(buttonsDiv);
+
+                    const contentDiv = document.createElement('div');
+                    contentBtn);
 
                     header.appendChild(langSpan);
                     header.appendChild(buttonsDiv);
@@ -2114,74 +2514,154 @@
                     pre.parentNode.replaceChild(container, pre);
                 });
 
+                const contentHtml = tempDivDiv.className = 'code-block-content';
+                    contentDiv.appendChild(pre.cloneNode(true));
+
+                    container.appendChild(header);
+                    container.appendChild(contentDiv);
+
+                    pre.parentNode.replaceChild(container, pre);
+                });
+
                 const contentHtml = tempDiv.innerHTML;
 
                 let attachmentsHtml = '';
                 if (msg.attachments && msg.attachments.length) {
-                    attachmentsHtml = '<div style="margin-top:8px">' + msg.attachments.map(f => 
-                        `<span class="attachment-chip"><i class="fas fa-paperclip"></i> ${f.name}</span>`
+                    attachmentsHtml = '<div style="margin-top:.innerHTML;
+
+                let attachmentsHtml = '';
+                if (msg.attachments && msg.attachments.length) {
+                    attachmentsHtml = '<div style="margin-top:8px">' + msg.attachments.map8px">' + msg.attachments.map(f => 
+                        `<span class="attachment-chip"><i(f => 
+                        `<span class="attachment-chip"><i class="fas fa-paper class="fas fa-paperclip"></clip"></i> ${f.name}</span>i> ${f.name}</span>`
+                    ).join('')`
                     ).join('') + '</div>';
                 }
 
-                div.innerHTML = `
-                    <div class="message-text">${contentHtml}</div>
-                    ${attachmentsHtml}
-                    <div class="timestamp">${new Date(msg.timestamp).toLocaleTimeString()}</div>
-                `;
-                chatMessagesDiv.appendChild(div);
+ + '</div>';
+                }
 
-                div.querySelectorAll('.code-block-content pre code').forEach(block => {
-                    hljs.highlightElement(block);
+                div                div.innerHTML = `
+                    <div.innerHTML = `
+                    <div class=" class="message-text">${contentHtmlmessage-text">${contentHtml}</div}</div>
+                    ${att>
+                    ${attachmentsHtml}
+                   achmentsHtml}
+                    <div <div class="timestamp">${new Date(msg class="timestamp">${new Date(msg.timestamp).toLocaleTimeString()}</div>
+               .timestamp).toLocaleTimeString()}</div>
+                `;
+ `;
+                chat                chatMessagesDiv.appendChild(MessagesDiv.appendChild(div);
+
+div);
+
+                div.querySelectorAll                div.querySelectorAll('.code-block-content('.code-block-content pre code').forEach pre code').forEach(block => {
+(block => {
+                    hl                    hljs.hjs.highlightighlightElement(block);
+Element(block);
+                });
                 });
             }
 
-            function addMessageToCurrentConversation(msg) {
-                let conv = conversations.find(c => c.id === currentConversationId);
-                if (!conv) {
-                    conv = createNewConversation();
+            function addMessage            }
+
+            function addMessageToCurrentConversationToCurrentConversation(msg) {
+               (msg) {
+                let conv let conv = conversations.find(c = conversations.find(c => c.id === => c.id === currentConversationId currentConversationId);
+               );
+                if (!conv) if (!conv) {
+                    conv {
+                    conv = createNewConversation = createNewConversation();
                 }
-                conv.messages.push(msg);
-                saveConversations();
-                if (conv.messages.length === 1 && msg.role === 'user') {
-                    conv.title = msg.content.substring(0, 30) + (msg.content.length > 30 ? '…' : '');
-                    renderChatHistory();
+               ();
+                }
+                conv.messages.push conv.messages.push(msg);
+(msg);
+                saveConversations                saveConversations();
+               ();
+                if (conv.messages.length if (conv.messages.length ===  === 1 &&1 && msg. msg.role === 'userrole === 'user') {
+') {
+                    conv.title =                    conv.title = msg.content msg.content.substring(.substring(0, 300, 30) +) + (msg (msg.content.length > .content.length > 30 ? '…30 ? '…' : '');
+                    render' : '');
+                    renderChatChatHistory();
+                }
+History();
                 }
             }
+
+            function scroll            }
 
             function scrollToBottom() {
-                chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+ToBottom() {
+                chatMessagesDiv                chatMessagesDiv.scrollTop =.scrollTop = chatMessages chatMessagesDiv.scDiv.scrollHeightrollHeight;
             }
 
-            // ----- FILE ATTACHMENTS -----
-            function handleFileSelect(e) {
-                if (!isLoggedIn()) return;
-                addAttachments(Array.from(e.target.files));
+            // -----;
             }
-            function handleFileDrop(e) {
+
+            // ----- FILE ATT FILE ATTACHMENTSACHMENTS -----
+ -----
+            function            function handleFileSelect(e) {
+ handleFileSelect(e) {
+                if                if (!isLoggedIn (!isLoggedIn()) return;
+                addAtt()) return;
+                addAttachments(Array.from(eachments(Array.from(e.target.files.target.files));
+            }
+           ));
+            }
+            function handle function handleFileDrop(e)FileDrop(e) {
+                {
                 e.preventDefault();
-                if (!isLoggedIn()) return;
-                addAttachments(Array.from(e.dataTransfer.files));
+                e.preventDefault();
+                if (! if (!isLoggedisLoggedIn()) return;
+In()) return;
+                add                addAttachmentsAttachments(Array.from(e(Array.from(e.dataTransfer.dataTransfer.files));
+           .files));
             }
-            function addAttachments(files) {
-                attachments.push(...files);
-                updateAttachmentPreview();
+            function add }
+            function addAttachments(filesAttachments(files) {
+) {
+                attachments.push(...                attachments.push(...files);
+files);
+                updateAttachmentPreview                updateAttachmentPreview();
             }
-            function updateAttachmentPreview() {
-                attachmentPreview.innerHTML = attachments.map((f, i) => `
-                    <span class="attachment-chip">
-                        <i class="fas fa-file"></i> ${f.name}
-                        <i class="fas fa-times" onclick="window.removeAttachment(${i})"></i>
+           ();
+            }
+            function updateAttachmentPreview function updateAttachmentPreview() {
+() {
+                attachmentPreview.innerHTML = attachments.map((                attachmentPreview.innerHTML = attachments.map((f, i)f, i) => `
+                    => `
+                    <span class="attachment <span class="attachment-chip">
+-chip">
+                        <i class                        <i class="fas fa-file="fas fa-file"></i"></i> ${f.name> ${f.name}
+                       }
+                        <i class=" <i class="fas fa-times"fas fa-times" onclick="window.remove onclick="window.removeAttachment(${iAttachment(${i})"></})"></i>
+                    </i>
                     </span>
+                `span>
                 `).join('');
+           ).join('');
             }
-            window.removeAttachment = (index) => {
-                attachments.splice(index, 1);
-                updateAttachmentPreview();
+            }
+            window.removeAttachment = window.removeAttachment = (index (index) => {
+                attachments.splice(index) => {
+                attachments.splice(index, , 1);
+1);
+                updateAttachmentPreview                updateAttachmentPreview();
+           ();
             };
 
+            // Start };
+
             // Start everything
+ everything
             init();
         })();
-    </script>
+            init();
+        })();
+    </    </script>
+script>
 </body>
+</</body>
 </html>
+html>
