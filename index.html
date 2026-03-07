@@ -1251,8 +1251,10 @@
                     const isEmail = loginInput.includes('@') && loginInput.includes('.');
                     if (isEmail) {
                         email = loginInput;
+                        console.log('Logging in with email:', email);
                     } else {
                         // Treat as username – look up email in profiles
+                        console.log('Looking up email for username:', loginInput);
                         const { data: profile, error: profileError } = await supabase
                             .from('profiles')
                             .select('email')
@@ -1267,6 +1269,7 @@
                             return;
                         }
                         email = profile.email;
+                        console.log('Found email:', email);
                     }
 
                     // Now log in with that email
@@ -1304,6 +1307,7 @@
 
             async function logout() {
                 await supabase.auth.signOut();
+                profileModal.classList.remove('show'); // Close modal
             }
 
             function updateLoginUI() {
