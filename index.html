@@ -81,7 +81,8 @@
         #credit-balance,
         #credit-balance i,
         .login-container .create-account-link,
-        .close-modal:hover {
+        .close-modal:hover,
+        .profile-action-btn {
             color: var(--accent-color);
         }
         .new-chat-btn,
@@ -91,7 +92,6 @@
         #modal-login-btn, #modal-register-btn,
         .modal-content button,
         .login-container button,
-        #profile-modal .logout-btn,
         #register-modal .register-btn {
             background-color: var(--accent-color);
         }
@@ -102,7 +102,6 @@
         #modal-login-btn:hover, #modal-register-btn:hover,
         .modal-content button:hover,
         .login-container button:hover,
-        #profile-modal .logout-btn:hover,
         #register-modal .register-btn:hover {
             background-color: var(--accent-hover);
         }
@@ -739,10 +738,10 @@
             border: 1px solid #3a3a3a;
             border-radius: 16px;
             padding: 32px;
-            width: 300px;
+            width: 320px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 16px;
         }
         .profile-modal-content h2 {
             color: var(--accent-color);
@@ -751,16 +750,49 @@
         .profile-info {
             font-size: 1.1rem;
             text-align: center;
+            word-break: break-word;
         }
-        .profile-modal-content button {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            color: white;
+        .profile-credits {
             font-size: 1rem;
+            text-align: center;
+            background-color: #1f1f1f;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #3a3a3a;
+        }
+        .profile-action-btn {
+            background: none;
+            border: none;
+            color: var(--accent-color);
+            font-size: 1rem;
+            padding: 8px;
             cursor: pointer;
-            transition: background 0.2s;
+            width: 100%;
+            text-align: center;
+            transition: opacity 0.2s;
+        }
+        .profile-action-btn:hover {
+            text-decoration: underline;
+            opacity: 0.9;
+        }
+        #profile-logout-btn {
+            color: #ff6b6b;
+        }
+        #profile-logout-btn:hover {
+            text-decoration: underline;
+        }
+        #profile-close-btn {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1rem;
+            padding: 8px;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+        }
+        #profile-close-btn:hover {
+            color: #fff;
         }
 
         /* ----- CHAT INPUT ----- */
@@ -1014,8 +1046,11 @@
         <div class="profile-modal-content">
             <h2>Profile</h2>
             <div class="profile-info" id="profile-email"></div>
-            <button class="logout-btn" id="profile-logout-btn">Logout</button>
-            <button id="profile-close-btn" style="background-color: #6c757d;">Close</button>
+            <div class="profile-credits" id="profile-credits">Credits: <span id="profile-credits-amount">0</span></div>
+            <button class="profile-action-btn" id="profile-change-password">Change Password</button>
+            <button class="profile-action-btn" id="profile-buy-credits">Buy Credits</button>
+            <button class="profile-action-btn" id="profile-logout-btn">Logout</button>
+            <button id="profile-close-btn">Close</button>
         </div>
     </div>
 
@@ -1089,6 +1124,9 @@
             const colorSwatches = document.querySelectorAll('.color-swatch');
             const profileModal = document.getElementById('profile-modal');
             const profileEmail = document.getElementById('profile-email');
+            const profileCreditsAmount = document.getElementById('profile-credits-amount');
+            const profileChangePassword = document.getElementById('profile-change-password');
+            const profileBuyCredits = document.getElementById('profile-buy-credits');
             const profileLogoutBtn = document.getElementById('profile-logout-btn');
             const profileCloseBtn = document.getElementById('profile-close-btn');
             const modelSelect = document.getElementById('model-select');
@@ -1105,6 +1143,9 @@
             // ----- CREDIT MANAGEMENT -----
             function updateCreditDisplay() {
                 creditAmountSpan.textContent = creditBalance;
+                if (profileModal.classList.contains('show')) {
+                    profileCreditsAmount.textContent = creditBalance;
+                }
             }
 
             async function loadUserProfile() {
@@ -1210,7 +1251,7 @@
                 }
             }
 
-            // ----- LOGIN SYSTEM (email + password only) -----
+            // ----- LOGIN SYSTEM (email only) -----
             function isLoggedIn() {
                 return currentUser !== null;
             }
@@ -1273,7 +1314,7 @@
 
             async function logout() {
                 await supabase.auth.signOut();
-                profileModal.classList.remove('show');
+                profileModal.classList.remove('show'); // Close modal immediately
             }
 
             function updateLoginUI() {
@@ -1308,8 +1349,24 @@
 
             function showProfileModal() {
                 if (!currentUser) return;
-                profileEmail.textContent = `Email: ${currentUser.email}`;
+                profileEmail.textContent = `${currentUser.email}`;
+                profileCreditsAmount.textContent = creditBalance;
                 profileModal.classList.add('show');
+            }
+
+            // ----- PROFILE ACTIONS -----
+            async function handleChangePassword() {
+                if (!currentUser) return;
+                const { error } = await supabase.auth.resetPasswordForEmail(currentUser.email);
+                if (error) {
+                    alert('Error sending password reset email: ' + error.message);
+                } else {
+                    alert('Password reset email sent. Please check your inbox.');
+                }
+            }
+
+            function handleBuyCredits() {
+                alert('Buy credits functionality coming soon!');
             }
 
             // ----- REGISTRATION MODAL -----
@@ -1357,6 +1414,22 @@
                 if (error) {
                     registerError.textContent = error.message;
                     return;
+                }
+
+                if (data.user) {
+                    const { error: upsertError } = await supabase
+                        .from('profiles')
+                        .upsert({ 
+                            id: data.user.id,
+                            email: email,
+                            coin_balance: 1000
+                        }, { onConflict: 'id' });
+
+                    if (upsertError) {
+                        console.error('Error upserting profile:', upsertError);
+                        registerError.textContent = 'Account created but profile setup failed. Please contact support.';
+                        return;
+                    }
                 }
 
                 alert('Registration successful! Please check your email to confirm (or log in if email confirmation is disabled).');
@@ -1558,6 +1631,8 @@
                     profileModal.classList.remove('show');
                 });
                 profileLogoutBtn.addEventListener('click', logout);
+                profileChangePassword.addEventListener('click', handleChangePassword);
+                profileBuyCredits.addEventListener('click', handleBuyCredits);
                 window.addEventListener('click', (e) => {
                     if (e.target === profileModal) {
                         profileModal.classList.remove('show');
@@ -1590,20 +1665,7 @@
                     });
                 });
                 document.addEventListener('click', (e) => {
-                    if (!colorPickerBtn.contains(e.target) && !colorDropdown.contains(e.target {
                     if (!colorPickerBtn.contains(e.target) && !colorDropdown.contains(e.target)) {
-                        colorDropdown.classList.remove('show');
-                    }
-                });
-
-                // Registration modal
-                closeRegister.addEventListener('click', closeRegisterModal);
-                window.addEventListener('click', (e) => {
-                    if (e.target === registerModal) {
-                        closeRegisterModal();
-                    }
-                });
-                register)) {
                         colorDropdown.classList.remove('show');
                     }
                 });
@@ -1617,325 +1679,163 @@
                 });
                 registerSubmit.addEventListener('click', handleRegister);
 
-                [regEmail, regPassword, regConfirm].forEachSubmit.addEventListener('click', handleRegister);
-
                 [regEmail, regPassword, regConfirm].forEach(field => {
                     field.addEventListener('keypress', (e) => {
-                        if (e(field => {
-                    field.addEventListener('keypress', (e) => {
                         if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handle.key === 'Enter') {
                             e.preventDefault();
                             handleRegister();
                         }
                     });
                 });
 
-Register();
-                        }
-                    });
-                });
-
                 // Code block buttons delegation
-                               // Code block buttons delegation
-                chatMessages chatMessagesDiv.addEventListener('click', (e) => {
-Div.addEventListener('click', (e) => {
-                    const btn = e.target.closest                    const btn = e.target.closest('button('button');
-                   ');
-                    if (!btn) if (!btn) return;
+                chatMessagesDiv.addEventListener('click', (e) => {
+                    const btn = e.target.closest('button');
+                    if (!btn) return;
 
- return;
+                    const container = btn.closest('.code-block-container');
+                    if (!container) return;
 
-                    const                    const container = btn.cl container = btn.closest('.osest('.code-block-container');
-code-block-container');
-                    if                    if (!container) return (!container) return;
+                    const codeElement = container.querySelector('.code-block-content pre code');
+                    if (!codeElement) return;
+                    const codeText = codeElement.textContent || '';
 
-                    const code;
-
-                    const codeElement =Element = container.querySelector('.code container.querySelector('.code-block-content-block-content pre code');
-                    pre code');
-                    if (!codeElement if (!codeElement) return;
-                    const code) return;
-                    const codeText = codeElement.textContentText = codeElement.textContent || '';
-
-                    || '';
-
-                    if (btn.classList if (btn.classList.contains('copy-code-btn')).contains('copy-code-btn')) {
-                        {
-                        e.preventDefault e.preventDefault();
-                        e.stop();
-                        e.stopPropagationPropagation();
-                       ();
-                        navigator.clip navigator.clipboard.writeboard.writeText(codeText).Text(codeText).then(() => {
-then(() => {
-                            const originalText                            const originalText = btn.innerHTML;
- = btn.innerHTML;
-                            btn.innerHTML = '<i                            btn.innerHTML = '<i class=" class="fas fa-check"></fas fa-check"></i> Copiedi> Copied!';
-                            setTimeout!';
-                            setTimeout(() =>(() => {
-                                btn.innerHTML {
+                    if (btn.classList.contains('copy-code-btn')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(codeText).then(() => {
+                            const originalText = btn.innerHTML;
+                            btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                            setTimeout(() => {
                                 btn.innerHTML = originalText;
- = originalText;
-                            }, 200                            }, 2000);
-                        }).catch(()0);
+                            }, 2000);
                         }).catch(() => {
-                            const textarea => {
-                            const textarea = document.createElement(' = document.createElement('textarea');
-textarea');
-                            textarea.value                            textarea.value = codeText;
- = codeText;
-                            textarea.style.position =                            textarea.style.position = 'fixed';
-                            'fixed';
-                            textarea textarea.style.opacity =.style.opacity = '0';
-                            '0';
-                            document.body.appendChild(text document.body.appendChild(textarea);
-                            textarea.selectarea);
+                            const textarea = document.createElement('textarea');
+                            textarea.value = codeText;
+                            textarea.style.position = 'fixed';
+                            textarea.style.opacity = '0';
+                            document.body.appendChild(textarea);
                             textarea.select();
-                            document.exec();
                             document.execCommand('copy');
-                            documentCommand('copy');
                             document.body.removeChild(textarea);
-                            const originalText.body.removeChild(textarea);
                             const originalText = btn.innerHTML;
                             btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
                             setTimeout(() => {
                                 btn.innerHTML = originalText;
                             }, 2000);
                         });
-                    } else if = btn.innerHTML;
-                            btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-                            setTimeout(() => {
-                                btn.innerHTML = originalText;
-                            }, 2000);
-                        });
                     } else if (btn.classList.contains('download-code-btn')) {
- (btn.classList.contains('download-code-btn')) {
                         e.preventDefault();
-                        e.stopPropagation();
-                        const blob = new Blob([codeText], { type: 'text/plain' });
-                        const url = URL.create                        e.preventDefault();
                         e.stopPropagation();
                         const blob = new Blob([codeText], { type: 'text/plain' });
                         const url = URL.createObjectURL(blob);
-                        const a = document.createElement('aObjectURL(blob);
                         const a = document.createElement('a');
-                        a.href = url;
-');
                         a.href = url;
                         a.download = 'code.txt';
                         a.click();
-                        URL.revokeObjectURL(url                        a.download = 'code.txt';
-                        a.click();
                         URL.revokeObjectURL(url);
-                    } else);
-                    } else if (btn.classList.contains(' if (btn.classList.contains('export-code-btn'))export-code-btn')) {
-                        e.preventDefault {
+                    } else if (btn.classList.contains('export-code-btn')) {
                         e.preventDefault();
-                       ();
-                        e.stopPropagation e.stopPropagation();
-                        if (();
-                        if (codeEditorcodeEditor) {
-                            codeEditor.set) {
-                            codeEditor.setValue(codeValue(codeText);
-                            codeText);
-                            codeEditor.fEditor.focus();
+                        e.stopPropagation();
+                        if (codeEditor) {
+                            codeEditor.setValue(codeText);
+                            codeEditor.focus();
                         }
-ocus();
-                        }
-                    }
-                });
                     }
                 });
             }
 
-            // ----- FILE            }
-
-            // ----- FILE UPL UPLOAD HANDLER -----
-OAD HANDLER -----
-            function            function handleFile handleFileUpload(e) {
-Upload(e) {
-                const file =                const file = e.target e.target.files[0.files[0];
-];
-                if (!                if (!file)file) return;
-
-                const return;
+            // ----- FILE UPLOAD HANDLER -----
+            function handleFileUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
 
                 const reader = new FileReader();
- reader = new FileReader();
-                reader                reader.onload.onload = (event) = (event) => {
-                    const => {
-                    const content = event.target content = event.target.result;
-                    codeEditor.set.result;
-                    codeEditor.setValue(contentValue(content);
-                   );
-                    setExtension setExtensionFromFilename(file.nameFromFilename(file.name);
-               );
+                reader.onload = (event) => {
+                    const content = event.target.result;
+                    codeEditor.setValue(content);
+                    setExtensionFromFilename(file.name);
                 };
-                };
-                reader.readAsText reader.readAsText(file);
-                code(file);
-                codeUploadInput.value =UploadInput.value = '';
-            '';
+                reader.readAsText(file);
+                codeUploadInput.value = '';
             }
 
-            function setExtensionFrom }
-
-            function setExtensionFromFilename(filenameFilename(filename) {
-                if) {
+            function setExtensionFromFilename(filename) {
                 if (!filename) return;
-                (!filename) return;
-                const ext const extMatch = filename.match(/\Match = filename.match(/\.[0-9.[0-9a-za-z]+$/i);
-]+$/i);
-                if (ext                if (extMatch) {
-                   Match) {
-                    const ext = ext const ext = extMatch[0].toLowerCaseMatch[0].toLowerCase();
-                    let found();
+                const extMatch = filename.match(/\.[0-9a-z]+$/i);
+                if (extMatch) {
+                    const ext = extMatch[0].toLowerCase();
                     let found = false;
-                    = false;
-                    for (let i for (let i = 0; = 0; i < extensionSelect i < extensionSelect.options.length; i.options.length; i++) {
-                        const++) {
-                        const opt = opt = extensionSelect extensionSelect.options[i];
-                        if (.options[i];
-                        if (opt.value === extopt.value === ext) {
-) {
+                    for (let i = 0; i < extensionSelect.options.length; i++) {
+                        const opt = extensionSelect.options[i];
+                        if (opt.value === ext) {
                             extensionSelect.selectedIndex = i;
-                            extensionSelect.selectedIndex = i;
-                            found = true                            found = true;
+                            found = true;
                             break;
                         }
                     }
-;
-                            break;
-                        }
-                    if                    }
-                    if (!found (!found) {
-                        extension) {
-                        extensionSelect.valueSelect.value = 'custom';
-                        custom = 'custom';
-                        customExtensionInputExtensionInput.value = ext;
-.value = ext;
-                        custom                        customExtensionInputExtensionInput.classList.add.classList.add('show');
-                   ('show');
+                    if (!found) {
+                        extensionSelect.value = 'custom';
+                        customExtensionInput.value = ext;
+                        customExtensionInput.classList.add('show');
                     } else {
-                        } else {
-                        customExtension customExtensionInput.classList.remove('Input.classList.remove('show');
-                    }
-                }show');
+                        customExtensionInput.classList.remove('show');
                     }
                 } else {
-                    extensionSelect.value else {
                     extensionSelect.value = '.txt';
-                    customExtensionInput = '.txt';
-                    customExtensionInput.classList.remove.classList.remove('show');
-               ('show');
+                    customExtensionInput.classList.remove('show');
                 }
             }
-            }
 
-            // Helper }
-
-            // Helper to get to get language from class ( language from class (unchanged)
-           unchanged)
-            function get function getLanguageFromLanguageFromClass(className)Class(className) {
-                {
-                if (!className) if (!className) return ' return 'Code';
-                constCode';
-                const match = className.match match = className.match(/language-(\(/language-(\w+)/);
-w+)/);
-                if (match                if (match) {
-                    const) {
-                    const lang = match lang = match[1];
-[1];
-                    const extensions =                    const extensions = {
-                        {
-                        javascript: '.js javascript: '.js',
-                       ',
-                        python: python: '.py '.py',
-                        html:',
+            // Helper to get language from class (unchanged)
+            function getLanguageFromClass(className) {
+                if (!className) return 'Code';
+                const match = className.match(/language-(\w+)/);
+                if (match) {
+                    const lang = match[1];
+                    const extensions = {
+                        javascript: '.js',
+                        python: '.py',
                         html: '.html',
-                        css: '.html',
-                        css: '.css '.css',
-                       ',
-                        java: '.java java: '.java',
-                       ',
-                        cpp cpp: '.cpp',
-: '.cpp',
-                        c                        c: '.c',
-                        php: '.c',
+                        css: '.css',
+                        java: '.java',
+                        cpp: '.cpp',
+                        c: '.c',
                         php: '.php',
-                        ruby: '.php',
                         ruby: '.rb',
-: '.rb',
-                        go: '.                        go: '.go',
-                        rustgo',
-                        rust: '.: '.rs',
-rs',
+                        go: '.go',
+                        rust: '.rs',
                         swift: '.swift',
-                                               swift: '.swift',
                         kotlin: '.kt',
- kotlin: '.kt',
-                        typescript:                        typescript: '.ts',
-                        '.ts',
-                        markdown: '. markdown: '.md',
-                        json: '.md',
+                        typescript: '.ts',
+                        markdown: '.md',
                         json: '.json',
-                        xmljson',
                         xml: '.xml',
-: '.xml',
-                        yaml:                        yaml: '. '.yml',
-                        sql:yml',
+                        yaml: '.yml',
                         sql: '.sql',
-                        '.sql',
-                        bash: '.sh bash: '.sh',
-                       ',
+                        bash: '.sh',
                         shell: '.sh'
-                    shell: '.sh'
                     };
-                    const ext = extensions };
-                    const ext = extensions[lang] ||[lang] || '.txt '.txt';
-                    return lang';
-                    return lang.charAt(0)..charAt(0).toUpperCasetoUpperCase() + lang.slice() + lang.slice(1(1) + ' ' + ext;
-               ) + ' ' + ext;
-                }
+                    const ext = extensions[lang] || '.txt';
+                    return lang.charAt(0).toUpperCase() + lang.slice(1) + ' ' + ext;
                 }
                 return 'Code';
- return 'Code';
             }
 
-            }
-
-            //            // ----- S ----- SIDEBAR COLLAPSEIDEBAR COLLAPSE (unchanged) (unchanged) -----
- -----
-            function            function toggleSidebar() toggleSidebar() {
-                {
-                sidebar.classList sidebar.classList.toggle('coll.toggle('collapsed');
-                const isCollapsed');
-                const isCollapsed =apsed = sidebar.classList sidebar.classList.contains('collapsed');
-                localStorage.set.contains('collapsed');
+            // ----- SIDEBAR COLLAPSE (unchanged) -----
+            function toggleSidebar() {
+                sidebar.classList.toggle('collapsed');
+                const isCollapsed = sidebar.classList.contains('collapsed');
                 localStorage.setItem('sidebarCollapsed', isCollapsed);
-Item('sidebarCollapsed', isCollapsed);
-                const icon =                const icon = collapseBtn collapseBtn.querySelector('.querySelector('i');
-                if (isCollapsedi');
+                const icon = collapseBtn.querySelector('i');
                 if (isCollapsed) {
-) {
-                    icon.classList.remove                    icon.classList.remove('fa-chev('fa-chevron-left');
-                   ron-left');
-                    icon.classList.add('fa-chevron icon.classList.add('fa-chevron-right');
+                    icon.classList.remove('fa-chevron-left');
+                    icon.classList.add('fa-chevron-right');
                 } else {
--right');
-                } else {
-                    icon.classList.remove                    icon.classList.remove('fa-chevron-right');
-                    icon.classList.add('fa-chevron-left');
-                }
-                const onTransition('fa-chevron-right');
+                    icon.classList.remove('fa-chevron-right');
                     icon.classList.add('fa-chevron-left');
                 }
                 const onTransitionEnd = () => {
-                    if (!isDragging) applyChatRatio();
-                    sidebar.removeEventListener('transitionend', onTransitionEnd);
-                };
-                sidebar.addEventListener('transitionendEnd = () => {
                     if (!isDragging) applyChatRatio();
                     sidebar.removeEventListener('transitionend', onTransitionEnd);
                 };
@@ -1945,18 +1845,7 @@ Item('sidebarCollapsed', isCollapsed);
                 }, 250);
             }
             function loadSidebarState() {
-                const collapsed = localStorage.getItem('sidebar', onTransitionEnd);
-                setTimeout(() => {
-                    if (!isDragging) applyChatRatio();
-                }, 250);
-            }
-            function loadSidebarState() {
-                const collapsed = localStorage.getItem('sidebarCollapsed') === 'trueCollapsed') === 'true';
-                if (collapsed) {
-                    sidebar.classList.add('collapsed');
-                    const icon = collapseBtn.querySelector('i');
-                    icon.classList.remove('fa-chevron-left');
-                    icon.classList';
+                const collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
                 if (collapsed) {
                     sidebar.classList.add('collapsed');
                     const icon = collapseBtn.querySelector('i');
@@ -1965,221 +1854,109 @@ Item('sidebarCollapsed', isCollapsed);
                 }
             }
 
-            //.add('fa-chevron-right');
-                }
-            }
-
             // ----- RESIZING (unchanged) -----
-            let startX, startLeftWidth ----- RESIZING (unchanged) -----
-            let startX, startLeftWidth, start, startRightWidth;
-            function startResize(e) {
-                e.preventDefault();
-                isDraRightWidth;
+            let startX, startLeftWidth, startRightWidth;
             function startResize(e) {
                 e.preventDefault();
                 isDragging = true;
-                if (egging = true;
                 if (e.type === 'touchstart') {
-                    startX.type === 'touchstart') {
-                    startX = e.touches[0]. = e.touches[0].clientX;
+                    startX = e.touches[0].clientX;
                 } else {
-                   clientX;
-                } else {
-                    startX startX = e.clientX;
-                }
-                startLeft = e.clientX;
+                    startX = e.clientX;
                 }
                 startLeftWidth = chatPanel.offsetWidth;
-Width = chatPanel.offsetWidth;
-                start                startRightWidth = editorPanel.RightWidth = editorPanel.offsetWidthoffsetWidth;
-                divider.classList;
-                divider.classList.add('.add('dragging');
-               dragging');
-                document.addEventListener('mousemove', onMouseMove document.addEventListener('mousemove', onMouseMove);
-                document.addEventListener('touchmove', onMouseMove, { passive: false });
-                document.addEventListener('mouseup', stopResize);
-                document.addEventListener('touchend', stopRes);
+                startRightWidth = editorPanel.offsetWidth;
+                divider.classList.add('dragging');
+                document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('touchmove', onMouseMove, { passive: false });
                 document.addEventListener('mouseup', stopResize);
                 document.addEventListener('touchend', stopResize);
-                document.body.style.cize);
                 document.body.style.cursor = 'col-resize';
-                document.bodyursor = 'col-resize';
-                document.body.style.user.style.userSelect = 'none';
-                chatPanel.style.pointerSelect = 'none';
+                document.body.style.userSelect = 'none';
                 chatPanel.style.pointerEvents = 'none';
-               Events = 'none';
-                editorPanel editorPanel.style.pointerEvents =.style.pointerEvents = 'none 'none';
+                editorPanel.style.pointerEvents = 'none';
             }
-           ';
-            }
-            function on function onMouseMove(e)MouseMove(e) {
-                {
-                if (!isDra if (!isDragging)gging) return;
-                e return;
-.preventDefault();
-                let clientX                e.preventDefault();
+            function onMouseMove(e) {
+                if (!isDragging) return;
+                e.preventDefault();
                 let clientX;
-                if (;
-                if (e.typee.type === ' === 'touchmove') {
-                    clienttouchmove') {
-                    clientX = e.touches[0].clientX = e.touches[0].clientX;
-                }X;
+                if (e.type === 'touchmove') {
+                    clientX = e.touches[0].clientX;
                 } else {
- else {
-                    client                    clientX = e.clientX;
-X = e.clientX;
+                    clientX = e.clientX;
                 }
-                const                }
-                const dx = clientX - start dx = clientX - startX;
-X;
-                const newLeft                const newLeft = start = startLeftWidth + dxLeftWidth + dx;
-                const new;
-                const newRight = startRightRight = startRightWidth - dx;
-                ifWidth - dx;
-                if (new (newLeft >= 300Left >= 300 && newRight >= && newRight >= 300) {
- 300) {
-                    setChatEditor                    setChatEditorWidths(newLeftWidths(newLeft, new, newRight);
-                }
-Right);
+                const dx = clientX - startX;
+                const newLeft = startLeftWidth + dx;
+                const newRight = startRightWidth - dx;
+                if (newLeft >= 300 && newRight >= 300) {
+                    setChatEditorWidths(newLeft, newRight);
                 }
             }
-            function            }
-            function stopRes stopResize()ize() {
-                {
-                if (!isDra if (!isDragging) return;
-gging) return;
-                isDragging                isDragging = false;
-                = false;
+            function stopResize() {
+                if (!isDragging) return;
+                isDragging = false;
                 divider.classList.remove('dragging');
-                divider.classList.remove('dragging');
-                document.removeEventListener(' document.removeEventListener('mousmousemove', onMouseMoveemove', onMouseMove);
-               );
-                document.removeEventListener(' document.removeEventListener('touchmovetouchmove', on', onMouseMove);
-               MouseMove);
-                document.removeEventListener(' document.removeEventListener('mouseup', stopmouseup', stopResizeResize);
-               );
-                document.removeEventListener(' document.removeEventListener('toutouchend',chend', stopResize);
-                document stopResize);
-                document.body.style.cursor.body.style.cursor = '';
-                document = '';
-                document.body.style.body.style.userSelect = '';
-.userSelect = '';
-                chat                chatPanel.style.poPanel.style.pointerEventsinterEvents = '';
-                editor = '';
-                editorPanel.stylePanel.style.po.pointerEventsinterEvents = '';
-                update = '';
-                updateRatioFromRatioFromWidths();
-           Widths();
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('touchmove', onMouseMove);
+                document.removeEventListener('mouseup', stopResize);
+                document.removeEventListener('touchend', stopResize);
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                chatPanel.style.pointerEvents = '';
+                editorPanel.style.pointerEvents = '';
+                updateRatioFromWidths();
             }
+            function setChatEditorWidths(chatW, editorW) {
+                chatPanel.style.flex = 'none';
+                editorPanel.style.flex = 'none';
+                chatPanel.style.width = chatW + 'px';
+                editorPanel.style.width = editorW + 'px';
+                localStorage.setItem('chatWidth', chatW);
+                localStorage.setItem('editorWidth', editorW);
             }
-            function setChatEditor function setChatEditorWidths(chatWidths(chatW, editorWW, editorW) {
-) {
-                chatPanel.style.flex = '                chatPanel.style.flex = 'none';
-                editornone';
-                editorPanel.style.flexPanel.style.flex = 'none';
- = 'none';
-                chat                chatPanel.stylePanel.style.width = chatW.width = chatW + ' + 'px';
-px';
-                editorPanel.style                editorPanel.style.width =.width = editorW editorW + 'px';
- + 'px';
-                localStorage                localStorage.setItem('chat.setItem('chatWidth', chatWWidth', chatW);
-                localStorage.set);
-                localStorage.setItem('Item('editorWidth', editorW);
-editorWidth', editorW);
-            }
-            }
-            function updateRatio            function updateRatioFromWidths()FromWidths() {
-                const total {
-                const total = chat = chatPanel.Panel.offsetWidth + editoroffsetWidth + editorPanel.Panel.offsetWidth;
-               offsetWidth;
-                if ( if (total >total > 0) {
- 0) {
-                    chat                    chatWidthRatioWidthRatio = chatPanel. = chatPanel.offsetWidth / totaloffsetWidth / total;
-                    localStorage.setItem(';
-                    localStorage.setItem('chatRatiochatRatio', chatWidthRatio);
-                }
-            }
-            function apply', chatWidthRatio);
+            function updateRatioFromWidths() {
+                const total = chatPanel.offsetWidth + editorPanel.offsetWidth;
+                if (total > 0) {
+                    chatWidthRatio = chatPanel.offsetWidth / total;
+                    localStorage.setItem('chatRatio', chatWidthRatio);
                 }
             }
             function applyChatRatio() {
-ChatRatio() {
-                if                if (is (isDraggingDragging) return;
-               ) return;
-                const main const mainPanel = document.querySelectorPanel = document.querySelector('.main('.main-panel');
-               -panel');
-                const totalWidth = mainPanel const totalWidth = mainPanel.offsetWidth;
-.offsetWidth;
-                if (total                if (totalWidth === 0Width === 0) return;
-               ) return;
-                const saved const savedRatio = localStorage.getItem('chatRatio');
-Ratio = localStorage.getItem('chatRatio');
-                const                const ratio = savedRatio ratio = savedRatio ? parse ? parseFloat(savedRatioFloat(savedRatio)) :  : 0.5;
-0.5;
-                let                let chatW chatW = Math.round(total = Math.round(totalWidth *Width * ratio);
-                let ratio);
-                let editorW editorW = totalWidth - = totalWidth - chatW;
-                chatW;
-                if (chatW <  if (chatW < 300)300) {
-                    chatW =  {
+                if (isDragging) return;
+                const mainPanel = document.querySelector('.main-panel');
+                const totalWidth = mainPanel.offsetWidth;
+                if (totalWidth === 0) return;
+                const savedRatio = localStorage.getItem('chatRatio');
+                const ratio = savedRatio ? parseFloat(savedRatio) : 0.5;
+                let chatW = Math.round(totalWidth * ratio);
+                let editorW = totalWidth - chatW;
+                if (chatW < 300) {
                     chatW = 300;
-300;
-                    editorW = totalWidth                    editorW = totalWidth - 300;
- - 300;
+                    editorW = totalWidth - 300;
                 }
+                if (editorW < 300) {
+                    editorW = 300;
+                    chatW = totalWidth - 300;
                 }
-                if                if (editorW (editorW < 300 < 300) {
-) {
-                    editorW =                    editorW = 300 300;
-                   ;
-                    chatW = total chatW = totalWidth - 300;
-               Width - 300;
-                }
-                setChatEditorWidths( }
-                setChatEditorWidths(chatWchatW, editorW);
-, editorW);
+                setChatEditorWidths(chatW, editorW);
             }
-            function loadLayout            }
             function loadLayout() {
-                const() {
-                const w1 w1 = localStorage.getItem(' = localStorage.getItem('chatWidth');
-               chatWidth');
-                const w2 = const w2 = localStorage.getItem localStorage.getItem('editorWidth');
-('editorWidth');
-                if (w                if (w1 &&1 && w2) {
-                    set w2) {
-                    setChatEditorWidthsChatEditorWidths(parseInt(w(parseInt(w1),1), parseInt(w2));
- parseInt(w2));
-                }                } else {
-                    const else {
-                    const mainPanel = document.querySelector('. mainPanel = document.querySelector('.main-panel');
-main-panel');
-                    const total =                    const total = mainPanel mainPanel.offset.offsetWidth;
-                    setWidth;
-                    setChatEditorChatEditorWidths(MathWidths(Math.floor(total/.floor(total/2),2), Math.ceil(total/2 Math.ceil(total/2));
-                }
-                updateRatioFromWidth));
+                const w1 = localStorage.getItem('chatWidth');
+                const w2 = localStorage.getItem('editorWidth');
+                if (w1 && w2) {
+                    setChatEditorWidths(parseInt(w1), parseInt(w2));
+                } else {
+                    const mainPanel = document.querySelector('.main-panel');
+                    const total = mainPanel.offsetWidth;
+                    setChatEditorWidths(Math.floor(total/2), Math.ceil(total/2));
                 }
                 updateRatioFromWidths();
-s();
             }
 
-            //            }
-
-            // ----- CO ----- CODEMIRRORDEMIRROR -----
+            // ----- CODEMIRROR -----
             function initCodeEditor() {
                 const textarea = document.getElementById('code-editor');
-                code -----
-            function initCodeEditor() {
-                const textarea = document.getElementById('code-editor');
-                codeEditor = CodeMirror.fromTextArea(textarea,Editor = CodeMirror.fromTextArea(textarea, {
-                    lineNumbers: true,
-                    mode: 'javascript',
-                    theme: 'dracula',
-                    autoCloseBrackets: true,
-                    matchBrackets: true,
-                    {
+                codeEditor = CodeMirror.fromTextArea(textarea, {
                     lineNumbers: true,
                     mode: 'javascript',
                     theme: 'dracula',
@@ -2188,318 +1965,188 @@ s();
                     indentUnit: 4,
                     tabSize: 4,
                 });
-                codeEditor indentUnit: 4,
-                    tabSize: 4,
-                });
                 codeEditor.setSize('100%', '100%');
             }
 
-            // ----- EDIT.setSize('100%', '100%');
-            }
-
             // ----- EDITOR FEATURES -----
-            function sendCodeOR FEATURES -----
             function sendCodeToChat() {
-                if (!isToChat() {
                 if (!isLoggedIn()) {
-LoggedIn()) {
-                    showLoginForm();
-                    return;
                     showLoginForm();
                     return;
                 }
-                const code = codeEditor                }
                 const code = codeEditor.getValue();
-.getValue();
-                messageInput.value = code                messageInput.value = code;
-                messageInput;
+                messageInput.value = code;
                 messageInput.focus();
-               .focus();
-                messageInput.style.height messageInput.style.height = 'auto';
- = 'auto';
-                message                messageInput.style.height =Input.style.height = Math.min(messageInput Math.min(messageInput.scrollHeight,.scrollHeight, 120) + 120) + 'px';
-            'px';
+                messageInput.style.height = 'auto';
+                messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
             }
-            }
-            function clearEditor() function clearEditor() {
-                codeEditor {
+            function clearEditor() {
                 codeEditor.setValue('');
             }
 
-           .setValue('');
-            }
-
-            // ----- // ----- DOWNLOAD -----
-            function DOWNLOAD -----
-            function handleExtensionChange() handleExtensionChange() {
-                {
-                if ( if (extensionSelect.value === 'custom') {
-extensionSelect.value === 'custom') {
-                    custom                    customExtensionInputExtensionInput.classList.add('show.classList.add('show');
-               ');
+            // ----- DOWNLOAD -----
+            function handleExtensionChange() {
+                if (extensionSelect.value === 'custom') {
+                    customExtensionInput.classList.add('show');
                 } else {
-                    customExtensionInput.classList } else {
-                    customExtensionInput.classList.remove('.remove('show');
-                }
-show');
+                    customExtensionInput.classList.remove('show');
                 }
             }
-            }
-            function getSelected            function getSelectedExtension() {
-               Extension() {
-                if (extensionSelect if (extensionSelect.value ===.value === 'custom') {
-                    let 'custom') {
-                    let ext = customExtension ext = customExtensionInput.value.trim();
-Input.value.trim();
-                    if (!ext                    if (!ext.startsWith('.'.startsWith('.')) ext = '.')) ext = '.' + ext;
-                    + ext;
-                    return ext return ext;
+            function getSelectedExtension() {
+                if (extensionSelect.value === 'custom') {
+                    let ext = customExtensionInput.value.trim();
+                    if (!ext.startsWith('.')) ext = '.' + ext;
+                    return ext;
                 }
-               ;
-                }
-                return extension return extensionSelect.value;
-           Select.value;
-            }
+                return extensionSelect.value;
             }
             function downloadFile() {
-                function downloadFile() {
-                const content = code const content = codeEditor.getValue();
-                const extEditor.getValue();
+                const content = codeEditor.getValue();
                 const ext = getSelectedExtension();
-                const filename = ` = getSelectedExtension();
-                const filename = `code${ext}`code${ext}`;
-                const blob = new Blob;
-                const blob = new Blob([content([content], { type: 'text], { type: 'text/plain' });
-/plain' });
-                const url =                const url = URL.createObjectURL(bl URL.createObjectURL(blob);
-                constob);
-                const a = a = document.createElement('a');
-                document.createElement('a');
-                a.h a.href = url;
-                aref = url;
-                a.download = filename.download = filename;
-                document.body;
+                const filename = `code${ext}`;
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
                 document.body.appendChild(a);
-               .appendChild(a);
-                a.click a.click();
-                document.body();
+                a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                download.removeChild(a);
-                URL.revokeObjectURL(url);
-                downloadStatus.textContent =Status.textContent = `✅ Downloaded as ${filename}`;
-                setTimeout(() => `✅ Downloaded as ${filename}`;
-                setTimeout(() => { downloadStatus.text { downloadStatus.textContent =Content = ''; },  ''; }, 30003000);
+                downloadStatus.textContent = `✅ Downloaded as ${filename}`;
+                setTimeout(() => { downloadStatus.textContent = ''; }, 3000);
             }
 
-           );
-            }
-
-            // ----- // ----- CHAT -----
- CHAT -----
-            async function sendMessage()            async function sendMessage() {
-                {
-                if (!isLogged if (!isLoggedIn())In()) {
-                    showLoginForm();
-                    return {
+            // ----- CHAT (real AI call) -----
+            async function sendMessage() {
+                if (!isLoggedIn()) {
                     showLoginForm();
                     return;
-               ;
                 }
 
-                const text = message }
+                const text = messageInput.value.trim();
+                if (!text && attachments.length === 0) return;
 
-                const text =Input.value messageInput.value.trim();
-                if (!text && attachments.trim();
-                if (!text && attachments.length ===.length === 0) return 0) return;
+                const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+                const requiredCredits = parseInt(selectedOption.dataset.credits, 10);
 
-               ;
-
-                const selectedOption = const selectedOption = modelSelect modelSelect.options[modelSelect.options[modelSelect.selectedIndex.selectedIndex];
-               ];
-                const requiredCredits const requiredCredits = parseInt = parseInt(selected(selectedOption.dataset.Option.dataset.credits, credits, 10);
-
-                if10);
-
-                if (!await deductCred (!await deductCredits(requiredCredits(requiredCredits)) return;
-
-its)) return;
+                if (!await deductCredits(requiredCredits)) return;
 
                 const userMsg = {
-                const userMsg = {
-                    role: '                    role: 'user',
-user',
+                    role: 'user',
                     content: text,
-                    timestamp:                    content: text,
-                    timestamp: new Date().to new Date().toISOString(),
-                    attachments: [...attISOString(),
+                    timestamp: new Date().toISOString(),
                     attachments: [...attachments]
-achments]
                 };
-                };
-                addMessageTo                addMessageToCurrentConversCurrentConversation(useration(userMsg);
+                addMessageToCurrentConversation(userMsg);
                 renderMessage(userMsg);
-Msg);
-                renderMessage(userMsg);
-                message                messageInput.value = '';
-Input.value = '';
+                messageInput.value = '';
                 attachments = [];
-                update                attachments = [];
                 updateAttachmentPreview();
-               AttachmentPreview();
                 scrollToBottom();
- scrollToBottom();
-                simulate                simulateNoApiResponse(NoApiResponse(selectedOptionselectedOption.textContent);
-           .textContent);
+
+                await getAIResponse(text, selectedOption.textContent);
             }
 
-            function simulate }
+            async function getAIResponse(prompt, modelName) {
+                showTypingIndicator();
 
-            function simulateNoApiResponse(modelNoApiResponse(modelName) {
-                showTypName) {
-                showTypingIndicatoringIndicator();
-                setTimeout(() => {
-                    hide();
-                setTimeout(() => {
-                    hideTypingTypingIndicator();
-                    const aiMsgIndicator();
+                try {
+                    const response = await fetch('https://aqvlqlcaawusskwwaetg.supabase.co/functions/v1/ai-proxy', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            prompt: prompt,
+                            model: 'deepseek-chat'
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`API error: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    const aiReply = data.choices[0].message.content;
+
                     const aiMsg = {
-                        role = {
-                        role: ': 'ai',
-                        contentai',
-                        content: `: `⚠️ No API⚠️ No API connected. Using ${ connected. Using ${modelNamemodelName} (demo mode} (demo mode).\n\nHere's).\n\nHere's an example an example code block code block:\n\n\:\n\n\`\`\`\`\`javascript\n// Sample code`javascript\n// Sample code\nfunction greet(name\nfunction greet(name) {\n  return \) {\n  return \`Hello, \`Hello, \${name}!\`;\${name}!\`;\n}\n\nn}\n\nconsole.log(greetconsole.log(greet('World'));\n\`('World'));\n\`\`\``\`\``,
-                        timestamp: new Date,
-                        timestamp: new Date().toISOString().toISOString()
-                   ()
+                        role: 'ai',
+                        content: aiReply,
+                        timestamp: new Date().toISOString()
                     };
-                    addMessageToCurrentConversation( };
                     addMessageToCurrentConversation(aiMsg);
-aiMsg);
-                    renderMessage(aiMsg                    renderMessage(aiMsg);
-                   );
+                    renderMessage(aiMsg);
+                } catch (error) {
+                    console.error('AI call failed:', error);
+                    const errorMsg = {
+                        role: 'ai',
+                        content: `⚠️ Error: ${error.message}. Please try again.`,
+                        timestamp: new Date().toISOString()
+                    };
+                    addMessageToCurrentConversation(errorMsg);
+                    renderMessage(errorMsg);
+                } finally {
+                    hideTypingIndicator();
                     scrollToBottom();
-                }, scrollToBottom();
-                }, 150 1500);
+                }
             }
 
-0);
-            }
-
-            function            function showTyp showTypingIndicator() {
-ingIndicator() {
-                const                const div = document.createElement div = document.createElement('div');
-               ('div');
-                div.id div.id = 'typing = 'typing-indicator-indicator';
-                div.className =';
-                div.className = 'typing-ind 'typing-indicator';
-                divicator';
-                div.innerHTML = '<span></span.innerHTML = '<span></span><span><span></span><span></span></span><span></span>';
-               >';
-                chatMessages chatMessagesDiv.appendChild(divDiv.appendChild(div);
-                scrollTo);
+            function showTypingIndicator() {
+                const div = document.createElement('div');
+                div.id = 'typing-indicator';
+                div.className = 'typing-indicator';
+                div.innerHTML = '<span></span><span></span><span></span>';
+                chatMessagesDiv.appendChild(div);
                 scrollToBottom();
-Bottom();
             }
-            function            }
-            function hideTyp hideTypingIndicator() {
-ingIndicator() {
-                const el = document.getElementById                const el = document.getElementById('typing-ind('typing-indicator');
-                if (elicator');
+            function hideTypingIndicator() {
+                const el = document.getElementById('typing-indicator');
                 if (el) el.remove();
-) el.remove();
             }
 
-            }
+            function renderMessage(msg) {
+                const div = document.createElement('div');
+                div.className = `message ${msg.role}`;
+                div.dataset.timestamp = msg.timestamp;
 
-            function renderMessage(msg)            function renderMessage(msg) {
-                {
-                const div const div = document.createElement('div');
- = document.createElement('div');
-                div.className                div.className = `message ${ = `message ${msg.msg.role}`;
-                div.datrole}`;
-                div.dataset.timestamp =aset.timestamp = msg.t msg.timestamp;
-
-                letimestamp;
-
-                let rawHtml = marked.parse(msg rawHtml = marked.parse(msg.content);
-.content);
-                const tempDiv                const tempDiv = document.createElement('div');
-                temp = document.createElement('div');
-                tempDiv.innerHTML = rawDiv.innerHTML = rawHtml;
-
-Html;
+                let rawHtml = marked.parse(msg.content);
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = rawHtml;
 
                 tempDiv.querySelectorAll('pre code').forEach(block => {
-                    const                tempDiv.querySelectorAll('pre code').forEach(block => {
-                    const pre = pre = block.parentNode;
-                    const block.parentNode;
-                    const className = block className = block.className || '';
-                   .className || '';
-                    const language const language = getLanguageFromClass( = getLanguageFromClass(className);
+                    const pre = block.parentNode;
+                    const className = block.className || '';
+                    const language = getLanguageFromClass(className);
 
-className);
+                    const container = document.createElement('div');
+                    container.className = 'code-block-container';
 
-                    const container = document.createElement                    const container = document.createElement('div('div');
-                   ');
-                    container.class container.className = 'code-block-container';
+                    const header = document.createElement('div');
+                    header.className = 'code-block-header';
 
-                   Name = 'code-block-container';
+                    const langSpan = document.createElement('span');
+                    langSpan.className = 'code-language';
+                    langSpan.textContent = language;
 
-                    const header const header = document.createElement('div');
- = document.createElement('div');
-                    header                    header.className = '.className = 'code-blockcode-block-header';
+                    const buttonsDiv = document.createElement('div');
+                    buttonsDiv.className = 'code-buttons';
 
-                   -header';
+                    const copyBtn = document.createElement('button');
+                    copyBtn.className = 'copy-code-btn';
+                    copyBtn.innerHTML = '<i class="far fa-copy"></i> Copy';
 
-                    const langSpan = document const langSpan = document.createElement('span');
-                    lang.createElement('span');
-                    langSpan.classSpan.className =Name = 'code-language';
- 'code-language';
-                    langSpan.text                    langSpan.textContent =Content = language;
-
- language;
-
-                    const buttonsDiv = document                    const buttonsDiv = document.createElement('.createElement('div');
-                    buttonsDiv.classdiv');
-                    buttonsDiv.className = 'codeName = 'code-butt-buttons';
-
-                    constons';
-
-                    const copyBtn = document.createElement(' copyBtn = document.createElement('button');
-button');
-                    copyBtn.class                    copyBtn.className =Name = 'copy-code-btn';
-                    'copy-code-btn';
-                    copyBtn.innerHTML = copyBtn.innerHTML = '<i class=" '<i class="far fa-copyfar fa-copy"></i"></i> Copy> Copy';
-
-                   ';
-
-                    const downloadBtn = const downloadBtn = document.createElement document.createElement('button('button');
-                    downloadBtn.className = '');
+                    const downloadBtn = document.createElement('button');
                     downloadBtn.className = 'download-code-btn';
-download-code-btn';
-                    download                    downloadBtn.innerHTML =Btn.innerHTML = '<i class '<i class="fas fa-d="fas fa-download"></ownload"></i> Download';
+                    downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download';
 
-                    consti> Download';
+                    const exportBtn = document.createElement('button');
+                    exportBtn.className = 'export-code-btn';
+                    exportBtn.innerHTML = '<i class="fas fa-arrow-right"></i> Export';
 
-                    const exportBtn = document exportBtn = document.createElement('button');
-                    export.createElement('button');
-                    exportBtn.className = 'exportBtn.className = 'export-code-btn';
-                   -code-btn';
-                    exportBtn.innerHTML = exportBtn.innerHTML = '<i class="fas fa '<i class="fas fa-arrow-arrow-right"></i>-right"></i> Export';
-
- Export';
-
-                    buttons                    buttonsDiv.appendChild(copyDiv.appendChild(copyBtn);
-                    buttonsDiv.appendChildBtn);
+                    buttonsDiv.appendChild(copyBtn);
                     buttonsDiv.appendChild(downloadBtn);
-(downloadBtn);
-                    buttonsDiv.appendChild                    buttonsDiv.appendChild(export(exportBtn);
-
-                    header.appendChild(langSpan);
-                    header.appendChild(buttonsDiv);
-
-                    const contentDiv = document.createElement('div');
-                    contentBtn);
+                    buttonsDiv.appendChild(exportBtn);
 
                     header.appendChild(langSpan);
                     header.appendChild(buttonsDiv);
@@ -2514,154 +2161,74 @@ download-code-btn';
                     pre.parentNode.replaceChild(container, pre);
                 });
 
-                const contentHtml = tempDivDiv.className = 'code-block-content';
-                    contentDiv.appendChild(pre.cloneNode(true));
-
-                    container.appendChild(header);
-                    container.appendChild(contentDiv);
-
-                    pre.parentNode.replaceChild(container, pre);
-                });
-
                 const contentHtml = tempDiv.innerHTML;
 
                 let attachmentsHtml = '';
                 if (msg.attachments && msg.attachments.length) {
-                    attachmentsHtml = '<div style="margin-top:.innerHTML;
-
-                let attachmentsHtml = '';
-                if (msg.attachments && msg.attachments.length) {
-                    attachmentsHtml = '<div style="margin-top:8px">' + msg.attachments.map8px">' + msg.attachments.map(f => 
-                        `<span class="attachment-chip"><i(f => 
-                        `<span class="attachment-chip"><i class="fas fa-paper class="fas fa-paperclip"></clip"></i> ${f.name}</span>i> ${f.name}</span>`
-                    ).join('')`
+                    attachmentsHtml = '<div style="margin-top:8px">' + msg.attachments.map(f => 
+                        `<span class="attachment-chip"><i class="fas fa-paperclip"></i> ${f.name}</span>`
                     ).join('') + '</div>';
                 }
 
- + '</div>';
-                }
-
-                div                div.innerHTML = `
-                    <div.innerHTML = `
-                    <div class=" class="message-text">${contentHtmlmessage-text">${contentHtml}</div}</div>
-                    ${att>
+                div.innerHTML = `
+                    <div class="message-text">${contentHtml}</div>
                     ${attachmentsHtml}
-                   achmentsHtml}
-                    <div <div class="timestamp">${new Date(msg class="timestamp">${new Date(msg.timestamp).toLocaleTimeString()}</div>
-               .timestamp).toLocaleTimeString()}</div>
+                    <div class="timestamp">${new Date(msg.timestamp).toLocaleTimeString()}</div>
                 `;
- `;
-                chat                chatMessagesDiv.appendChild(MessagesDiv.appendChild(div);
+                chatMessagesDiv.appendChild(div);
 
-div);
-
-                div.querySelectorAll                div.querySelectorAll('.code-block-content('.code-block-content pre code').forEach pre code').forEach(block => {
-(block => {
-                    hl                    hljs.hjs.highlightighlightElement(block);
-Element(block);
-                });
+                div.querySelectorAll('.code-block-content pre code').forEach(block => {
+                    hljs.highlightElement(block);
                 });
             }
 
-            function addMessage            }
-
-            function addMessageToCurrentConversationToCurrentConversation(msg) {
-               (msg) {
-                let conv let conv = conversations.find(c = conversations.find(c => c.id === => c.id === currentConversationId currentConversationId);
-               );
-                if (!conv) if (!conv) {
-                    conv {
-                    conv = createNewConversation = createNewConversation();
+            function addMessageToCurrentConversation(msg) {
+                let conv = conversations.find(c => c.id === currentConversationId);
+                if (!conv) {
+                    conv = createNewConversation();
                 }
-               ();
-                }
-                conv.messages.push conv.messages.push(msg);
-(msg);
-                saveConversations                saveConversations();
-               ();
-                if (conv.messages.length if (conv.messages.length ===  === 1 &&1 && msg. msg.role === 'userrole === 'user') {
-') {
-                    conv.title =                    conv.title = msg.content msg.content.substring(.substring(0, 300, 30) +) + (msg (msg.content.length > .content.length > 30 ? '…30 ? '…' : '');
-                    render' : '');
-                    renderChatChatHistory();
-                }
-History();
+                conv.messages.push(msg);
+                saveConversations();
+                if (conv.messages.length === 1 && msg.role === 'user') {
+                    conv.title = msg.content.substring(0, 30) + (msg.content.length > 30 ? '…' : '');
+                    renderChatHistory();
                 }
             }
-
-            function scroll            }
 
             function scrollToBottom() {
-ToBottom() {
-                chatMessagesDiv                chatMessagesDiv.scrollTop =.scrollTop = chatMessages chatMessagesDiv.scDiv.scrollHeightrollHeight;
+                chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
             }
 
-            // -----;
+            // ----- FILE ATTACHMENTS -----
+            function handleFileSelect(e) {
+                if (!isLoggedIn()) return;
+                addAttachments(Array.from(e.target.files));
             }
-
-            // ----- FILE ATT FILE ATTACHMENTSACHMENTS -----
- -----
-            function            function handleFileSelect(e) {
- handleFileSelect(e) {
-                if                if (!isLoggedIn (!isLoggedIn()) return;
-                addAtt()) return;
-                addAttachments(Array.from(eachments(Array.from(e.target.files.target.files));
-            }
-           ));
-            }
-            function handle function handleFileDrop(e)FileDrop(e) {
-                {
+            function handleFileDrop(e) {
                 e.preventDefault();
-                e.preventDefault();
-                if (! if (!isLoggedisLoggedIn()) return;
-In()) return;
-                add                addAttachmentsAttachments(Array.from(e(Array.from(e.dataTransfer.dataTransfer.files));
-           .files));
+                if (!isLoggedIn()) return;
+                addAttachments(Array.from(e.dataTransfer.files));
             }
-            function add }
-            function addAttachments(filesAttachments(files) {
-) {
-                attachments.push(...                attachments.push(...files);
-files);
-                updateAttachmentPreview                updateAttachmentPreview();
+            function addAttachments(files) {
+                attachments.push(...files);
+                updateAttachmentPreview();
             }
-           ();
-            }
-            function updateAttachmentPreview function updateAttachmentPreview() {
-() {
-                attachmentPreview.innerHTML = attachments.map((                attachmentPreview.innerHTML = attachments.map((f, i)f, i) => `
-                    => `
-                    <span class="attachment <span class="attachment-chip">
--chip">
-                        <i class                        <i class="fas fa-file="fas fa-file"></i"></i> ${f.name> ${f.name}
-                       }
-                        <i class=" <i class="fas fa-times"fas fa-times" onclick="window.remove onclick="window.removeAttachment(${iAttachment(${i})"></})"></i>
-                    </i>
+            function updateAttachmentPreview() {
+                attachmentPreview.innerHTML = attachments.map((f, i) => `
+                    <span class="attachment-chip">
+                        <i class="fas fa-file"></i> ${f.name}
+                        <i class="fas fa-times" onclick="window.removeAttachment(${i})"></i>
                     </span>
-                `span>
                 `).join('');
-           ).join('');
             }
-            }
-            window.removeAttachment = window.removeAttachment = (index (index) => {
-                attachments.splice(index) => {
-                attachments.splice(index, , 1);
-1);
-                updateAttachmentPreview                updateAttachmentPreview();
-           ();
+            window.removeAttachment = (index) => {
+                attachments.splice(index, 1);
+                updateAttachmentPreview();
             };
 
-            // Start };
-
             // Start everything
- everything
             init();
         })();
-            init();
-        })();
-    </    </script>
-script>
+    </script>
 </body>
-</</body>
 </html>
-html>
