@@ -1216,7 +1216,7 @@
                 }
             }
 
-            // ----- LOGIN SYSTEM (username + password) -----
+            // ----- LOGIN SYSTEM (username + password, with email fallback) -----
             function isLoggedIn() {
                 return currentUser !== null;
             }
@@ -1228,7 +1228,7 @@
                 loginContainer.id = 'chat-login-form';
                 loginContainer.innerHTML = `
                     <h2>Login to Chat</h2>
-                    <input type="text" id="login-username-input" placeholder="Username" autofocus>
+                    <input type="text" id="login-username-input" placeholder="Username or Email" autofocus>
                     <input type="password" id="login-password-input" placeholder="Password">
                     <button id="login-submit-btn">Login</button>
                     <div class="create-account-link" id="login-create-account">Create account</div>
@@ -1237,34 +1237,47 @@
                 chatMessagesDiv.appendChild(loginContainer);
 
                 document.getElementById('login-submit-btn').addEventListener('click', async () => {
-                    const username = document.getElementById('login-username-input').value.trim();
+                    const loginInput = document.getElementById('login-username-input').value.trim();
                     const password = document.getElementById('login-password-input').value;
 
-                    if (!username || !password) {
-                        document.getElementById('login-error').textContent = 'Username and password required.';
+                    if (!loginInput || !password) {
+                        document.getElementById('login-error').textContent = 'Username/Email and password required.';
                         return;
                     }
 
-                    // First, get the email associated with this username from profiles
-                    const { data: profile, error: profileError } = await supabase
-                        .from('profiles')
-                        .select('email')
-                        .eq('username', username)
-                        .maybeSingle();
+                    let email = null;
 
-                    if (profileError || !profile) {
-                        document.getElementById('login-error').textContent = 'Invalid username or password.';
-                        return;
+                    // Check if input looks like an email
+                    const isEmail = loginInput.includes('@') && loginInput.includes('.');
+                    if (isEmail) {
+                        email = loginInput;
+                    } else {
+                        // Treat as username – look up email in profiles
+                        const { data: profile, error: profileError } = await supabase
+                            .from('profiles')
+                            .select('email')
+                            .eq('username', loginInput)
+                            .maybeSingle();
+
+                        if (profileError) {
+                            console.error('Profile lookup error:', profileError);
+                        }
+                        if (!profile) {
+                            document.getElementById('login-error').textContent = 'Invalid username or password.';
+                            return;
+                        }
+                        email = profile.email;
                     }
 
                     // Now log in with that email
                     const { data, error } = await supabase.auth.signInWithPassword({
-                        email: profile.email,
+                        email,
                         password
                     });
 
                     if (error) {
                         document.getElementById('login-error').textContent = 'Invalid username or password.';
+                        console.error('Login error:', error);
                         return;
                     }
 
@@ -1390,7 +1403,11 @@
                         })
                         .eq('id', data.user.id);
 
-                    if (profileError) console.error('Error updating profile:', profileError);
+                    if (profileError) {
+                        console.error('Error updating profile:', profileError);
+                        registerError.textContent = 'Account created but profile update failed. Please contact support.';
+                        return;
+                    }
                 }
 
                 alert('Registration successful! Please check your email to confirm (or log in if email confirmation is disabled).');
