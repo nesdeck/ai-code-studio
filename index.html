@@ -1405,8 +1405,10 @@
 
                     if (profileError) {
                         console.error('Error updating profile:', profileError);
-                        registerError.textContent = 'Account created but profile update failed. Please contact support.';
+                        registerError.textContent = 'Account created but username not saved. Please contact support.';
                         return;
+                    } else {
+                        console.log('Profile updated successfully with username:', username);
                     }
                 }
 
