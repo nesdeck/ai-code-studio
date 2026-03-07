@@ -1314,7 +1314,7 @@
 
             async function logout() {
                 await supabase.auth.signOut();
-                profileModal.classList.remove('show'); // Close modal immediately
+                profileModal.classList.remove('show');
             }
 
             function updateLoginUI() {
@@ -2017,7 +2017,7 @@
                 setTimeout(() => { downloadStatus.textContent = ''; }, 3000);
             }
 
-            // ----- CHAT (real AI call) -----
+            // ----- CHAT (real AI call to third-party-ai-api) -----
             async function sendMessage() {
                 if (!isLoggedIn()) {
                     showLoginForm();
@@ -2052,7 +2052,7 @@
                 showTypingIndicator();
 
                 try {
-                    const response = await fetch('https://aqvlqlcaawusskwwaetg.supabase.co/functions/v1/ai-proxy', {
+                    const response = await fetch('https://aqvlqlcaawusskwwaetg.supabase.co/functions/v1/third-party-ai-api', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
