@@ -1053,6 +1053,7 @@
 
             // ----- STATE -----
             let currentUser = null;
+            let currentUsername = null;
             let conversations = [];
             let currentConversationId = null;
             let attachments = [];
@@ -1116,7 +1117,7 @@
 
                 const { data, error } = await supabase
                     .from('profiles')
-                    .select('coin_balance')
+                    .select('coin_balance, username')
                     .eq('id', user.id)
                     .single();
 
@@ -1126,6 +1127,7 @@
                 }
 
                 creditBalance = data.coin_balance;
+                currentUsername = data.username;
                 updateCreditDisplay();
 
                 supabase
@@ -1137,6 +1139,7 @@
                         filter: `id=eq.${user.id}`
                     }, (payload) => {
                         creditBalance = payload.new.coin_balance;
+                        currentUsername = payload.new.username;
                         updateCreditDisplay();
                     })
                     .subscribe();
@@ -1213,7 +1216,7 @@
                 }
             }
 
-            // ----- LOGIN SYSTEM -----
+            // ----- LOGIN SYSTEM (username + password) -----
             function isLoggedIn() {
                 return currentUser !== null;
             }
@@ -1225,7 +1228,7 @@
                 loginContainer.id = 'chat-login-form';
                 loginContainer.innerHTML = `
                     <h2>Login to Chat</h2>
-                    <input type="email" id="login-email-input" placeholder="Email" autofocus>
+                    <input type="text" id="login-username-input" placeholder="Username" autofocus>
                     <input type="password" id="login-password-input" placeholder="Password">
                     <button id="login-submit-btn">Login</button>
                     <div class="create-account-link" id="login-create-account">Create account</div>
@@ -1234,16 +1237,34 @@
                 chatMessagesDiv.appendChild(loginContainer);
 
                 document.getElementById('login-submit-btn').addEventListener('click', async () => {
-                    const email = document.getElementById('login-email-input').value.trim();
+                    const username = document.getElementById('login-username-input').value.trim();
                     const password = document.getElementById('login-password-input').value;
 
+                    if (!username || !password) {
+                        document.getElementById('login-error').textContent = 'Username and password required.';
+                        return;
+                    }
+
+                    // First, get the email associated with this username from profiles
+                    const { data: profile, error: profileError } = await supabase
+                        .from('profiles')
+                        .select('email')
+                        .eq('username', username)
+                        .maybeSingle();
+
+                    if (profileError || !profile) {
+                        document.getElementById('login-error').textContent = 'Invalid username or password.';
+                        return;
+                    }
+
+                    // Now log in with that email
                     const { data, error } = await supabase.auth.signInWithPassword({
-                        email,
+                        email: profile.email,
                         password
                     });
 
                     if (error) {
-                        document.getElementById('login-error').textContent = error.message;
+                        document.getElementById('login-error').textContent = 'Invalid username or password.';
                         return;
                     }
 
@@ -1277,7 +1298,7 @@
                     if (user) {
                         currentUser = user;
                         loginBtn.innerHTML = '<i class="fas fa-user-check"></i>';
-                        loginBtn.title = `Logged in as ${user.email}`;
+                        loginBtn.title = `Logged in as ${currentUsername || user.email}`;
                         messageInput.disabled = false;
                         sendBtn.disabled = false;
                         attachBtn.disabled = false;
@@ -1286,6 +1307,7 @@
                         loadConversations();
                     } else {
                         currentUser = null;
+                        currentUsername = null;
                         loginBtn.innerHTML = '<i class="fas fa-user"></i>';
                         loginBtn.title = 'Login';
                         messageInput.disabled = true;
@@ -1304,7 +1326,7 @@
 
             function showProfileModal() {
                 if (!currentUser) return;
-                profileUsername.textContent = `Email: ${currentUser.email}`;
+                profileUsername.textContent = `Username: ${currentUsername || 'unknown'}`;
                 profileModal.classList.add('show');
             }
 
@@ -1358,14 +1380,17 @@
                     return;
                 }
 
-                // Update the profile with username
+                // Update the profile with username and email
                 if (data.user) {
                     const { error: profileError } = await supabase
                         .from('profiles')
-                        .update({ username: username })
+                        .update({ 
+                            username: username,
+                            email: email 
+                        })
                         .eq('id', data.user.id);
 
-                    if (profileError) console.error('Error updating username:', profileError);
+                    if (profileError) console.error('Error updating profile:', profileError);
                 }
 
                 alert('Registration successful! Please check your email to confirm (or log in if email confirmation is disabled).');
