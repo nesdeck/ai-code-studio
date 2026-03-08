@@ -6,9 +6,17 @@
     <title>AI Chat · Code Studio</title>
     <!-- Font Awesome (icons) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- CodeMirror (editor) -->
+    <!-- CodeMirror (editor) - core first, then modes -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>   <!-- Java, C, C++ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script> <!-- Python support -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
     <!-- Highlight.js (for code blocks) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <!-- Marked (markdown parser) -->
@@ -1071,11 +1079,7 @@
         </div>
     </div>
 
-    <!-- SCRIPTS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
+    <!-- Highlight.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script>
         (function() {
@@ -1083,6 +1087,94 @@
             const SUPABASE_URL = 'https://aqvlqlcaawusskwwaetg.supabase.co';
             const SUPABASE_ANON_KEY = 'sb_publishable_J8C392wUBcsazsXIcsNaEw_9wB5yqbh';
             const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+            // ----- SYSTEM PROMPT FOR AI RESPONSE FORMATTING (no numbers or symbols before list items) -----
+            const SYSTEM_PROMPT = `You are an AI assistant. Follow these formatting rules strictly:
+- Respond in plain text. Do not use any special characters like dashes (-), asterisks (*), or numbers (like 1., 2.) before list items.
+- For lists, use plain text without any leading symbols or numbers (e.g., just write "Item" on a new line, not "- Item" or "1. Item").
+- Only use Markdown for headlines: # for main headline, ## for subheadline, etc.
+- For code blocks, wrap them with triple backticks and specify the language (e.g., \`\`\`python ... \`\`\`).
+- Do not use any other Markdown formatting like bold, italics, or inline code unless absolutely necessary, but prefer plain text.
+- Your response should be clean and easy to read without extraneous punctuation.`;
+
+            // ----- HELPER FUNCTIONS FOR LANGUAGE MAPPING -----
+            function getLanguageFromCodeElement(codeEl) {
+                if (!codeEl) return null;
+                const classList = codeEl.classList;
+                for (let cls of classList) {
+                    if (cls.startsWith('language-')) {
+                        return cls.substring('language-'.length);
+                    }
+                }
+                return null;
+            }
+
+            function getExtensionForLanguage(lang) {
+                const map = {
+                    javascript: '.js',
+                    python: '.py',
+                    html: '.html',
+                    css: '.css',
+                    java: '.java',
+                    cpp: '.cpp',
+                    c: '.c',
+                    php: '.php',
+                    ruby: '.rb',
+                    go: '.go',
+                    rust: '.rs',
+                    swift: '.swift',
+                    kotlin: '.kt',
+                    typescript: '.ts',
+                    markdown: '.md',
+                    json: '.json',
+                    xml: '.xml',
+                    yaml: '.yml',
+                    sql: '.sql',
+                    bash: '.sh',
+                    shell: '.sh'
+                };
+                return map[lang] || '.txt';
+            }
+
+            function getCodeMirrorMode(lang) {
+                const map = {
+                    javascript: 'javascript',
+                    python: 'python',
+                    html: 'htmlmixed',
+                    css: 'css',
+                    java: 'text/x-java',
+                    cpp: 'text/x-c++src',
+                    c: 'text/x-csrc',
+                    php: 'php',
+                    ruby: 'ruby',
+                    go: 'go',
+                    rust: 'rust',
+                    swift: 'swift',
+                    kotlin: 'kotlin',
+                    typescript: 'javascript',
+                    markdown: 'markdown',
+                    json: 'application/json',
+                    xml: 'xml',
+                    yaml: 'yaml',
+                    sql: 'sql',
+                    bash: 'shell',
+                    shell: 'shell'
+                };
+                return map[lang] || 'javascript';
+            }
+
+            // ----- FILE READING HELPER (for attachments) -----
+            function readFilesAsText(files) {
+                const readers = Array.from(files).map(file => {
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve({ name: file.name, content: reader.result });
+                        reader.onerror = () => reject(reader.error);
+                        reader.readAsText(file);
+                    });
+                });
+                return Promise.all(readers);
+            }
 
             // ----- STATE -----
             let currentUser = null;
@@ -1689,7 +1781,7 @@
                     });
                 });
 
-                // Code block buttons delegation
+                // Code block buttons delegation (copy, download, export)
                 chatMessagesDiv.addEventListener('click', (e) => {
                     const btn = e.target.closest('button');
                     if (!btn) return;
@@ -1728,11 +1820,17 @@
                     } else if (btn.classList.contains('download-code-btn')) {
                         e.preventDefault();
                         e.stopPropagation();
+                        
+                        // Determine language and set appropriate extension
+                        const lang = getLanguageFromCodeElement(codeElement);
+                        const ext = getExtensionForLanguage(lang);
+                        const filename = `code${ext}`;
+                        
                         const blob = new Blob([codeText], { type: 'text/plain' });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = 'code.txt';
+                        a.download = filename;
                         a.click();
                         URL.revokeObjectURL(url);
                     } else if (btn.classList.contains('export-code-btn')) {
@@ -1740,6 +1838,12 @@
                         e.stopPropagation();
                         if (codeEditor) {
                             codeEditor.setValue(codeText);
+                            // Set the editor mode based on language (now Python works because mode is loaded)
+                            const lang = getLanguageFromCodeElement(codeElement);
+                            const mode = getCodeMirrorMode(lang);
+                            codeEditor.setOption('mode', mode);
+                            // Force a refresh to ensure highlighting applies
+                            codeEditor.refresh();
                             codeEditor.focus();
                         }
                     }
@@ -2031,11 +2135,33 @@
                 const selectedOption = modelSelect.options[modelSelect.selectedIndex];
                 const requiredCredits = parseInt(selectedOption.dataset.credits, 10);
 
+                // Read attachments first, if any
+                let finalText = text;
+                if (attachments.length > 0) {
+                    try {
+                        const fileContents = await readFilesAsText(attachments);
+                        const attachmentText = fileContents.map(f => 
+                            `\n--- Attachment: ${f.name} ---\n${f.content}\n--- End of ${f.name} ---`
+                        ).join('\n');
+                        finalText = text + '\n' + attachmentText;
+                    } catch (error) {
+                        console.error('Error reading files:', error);
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'error-message';
+                        errorDiv.textContent = 'Could not read one or more attachments. They were not sent.';
+                        chatMessagesDiv.appendChild(errorDiv);
+                        setTimeout(() => errorDiv.remove(), 3000);
+                    }
+                }
+
+                // Prepend the system prompt to enforce formatting rules (no numbers or symbols before list items)
+                const fullPrompt = SYSTEM_PROMPT + "\n\nUser message:\n" + finalText;
+
                 if (!await deductCredits(requiredCredits)) return;
 
                 const userMsg = {
                     role: 'user',
-                    content: text,
+                    content: text,  // keep original text for display (attachments shown as chips)
                     timestamp: new Date().toISOString(),
                     attachments: [...attachments]
                 };
@@ -2046,7 +2172,7 @@
                 updateAttachmentPreview();
                 scrollToBottom();
 
-                await getAIResponse(text, selectedOption.textContent);
+                await getAIResponse(fullPrompt, selectedOption.textContent);
             }
 
             async function getAIResponse(prompt, modelName) {
@@ -2219,21 +2345,6 @@
                     <span class="attachment-chip">
                         <i class="fas fa-file"></i> ${f.name}
                         <i class="fas fa-times" onclick="window.removeAttachment(${i})"></i>
-                    </span>
-                `).join('');
-            }
-            window.removeAttachment = (index) => {
-                attachments.splice(index, 1);
-                updateAttachmentPreview();
-            };
-
-            // Start everything
-            init();
-        })();
-    </script>
-</body>
-</html>
-```-times" onclick="window.removeAttachment(${i})"></i>
                     </span>
                 `).join('');
             }
