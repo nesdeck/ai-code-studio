@@ -13,8 +13,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>   <!-- Java, C, C++ -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script> <!-- Python support -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
     <!-- Highlight.js (for code blocks) -->
@@ -70,6 +70,9 @@
         .delete-chat-btn {
             color: #ff6b6b;
         }
+        .edit-chat-btn {
+            color: #4db8ff;
+        }
 
         /* ----- ACCENT COLOR (CSS variable, default Capri) ----- */
         :root {
@@ -80,6 +83,7 @@
         .logo i,
         .send-btn, .attach-btn,
         .delete-chat-btn:hover,
+        .edit-chat-btn:hover,
         .message.ai .message-text,
         #login-btn.logged-in i,
         .code-block-header button i,
@@ -196,6 +200,10 @@
         .sidebar.collapsed .sidebar-bottom .color-picker-btn {
             margin: 0 auto;
         }
+        /* Hide edit/delete buttons when sidebar collapsed */
+        .sidebar.collapsed .chat-history-item .chat-item-actions {
+            display: none;
+        }
         .sidebar .collapse-btn {
             position: absolute;
             top: 50%;
@@ -289,25 +297,46 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .delete-chat-btn {
+        .chat-item-actions {
             position: absolute;
             right: 8px;
             top: 50%;
             transform: translateY(-50%);
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            background-color: transparent;
+            padding-left: 8px;
+        }
+        .chat-history-item:hover .chat-item-actions {
+            opacity: 1;
+        }
+        .edit-chat-btn, .delete-chat-btn {
             background: none;
             border: none;
             cursor: pointer;
             font-size: 1rem;
-            opacity: 0;
-            transition: opacity 0.2s;
             padding: 4px;
             border-radius: 4px;
+            transition: background 0.2s;
         }
-        .chat-history-item:hover .delete-chat-btn {
-            opacity: 1;
+        .edit-chat-btn:hover {
+            background-color: rgba(255,255,255,0.2);
         }
         .delete-chat-btn:hover {
             background-color: rgba(255,255,255,0.2);
+        }
+        /* Inline edit input */
+        .chat-title-input {
+            background: #3a3a3a;
+            border: 1px solid var(--accent-color);
+            color: white;
+            font-size: 0.9rem;
+            padding: 2px 4px;
+            border-radius: 4px;
+            width: 100%;
+            outline: none;
         }
         .sidebar-bottom {
             padding: 16px;
@@ -1434,7 +1463,7 @@
                         conversations = [];
                         currentConversationId = null;
                         chatMessagesDiv.innerHTML = '';
-                        showLoginForm();
+                        showLoginForm(); // Show login form automatically when logged out
                     }
                 });
             }
@@ -1529,7 +1558,7 @@
                 showLoginForm();
             }
 
-            // ----- CONVERSATIONS -----
+            // ----- CONVERSATIONS (with title column) -----
             async function saveConversations() {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
@@ -1541,14 +1570,15 @@
                 if (currentConversationId && typeof currentConversationId === 'string' && !currentConversationId.startsWith('conv_')) {
                     await supabase
                         .from('chats')
-                        .update({ messages: conv.messages })
+                        .update({ messages: conv.messages, title: conv.title })
                         .eq('id', currentConversationId);
                 } else {
                     const { data, error } = await supabase
                         .from('chats')
                         .insert({
                             user_id: user.id,
-                            messages: conv.messages
+                            messages: conv.messages,
+                            title: conv.title
                         })
                         .select()
                         .single();
@@ -1558,6 +1588,16 @@
                         conv.id = data.id;
                     }
                 }
+            }
+
+            // Update chat title in DB
+            async function updateChatTitle(id, newTitle) {
+                if (id.startsWith('conv_')) return; // temporary chat, not saved yet
+                const { error } = await supabase
+                    .from('chats')
+                    .update({ title: newTitle })
+                    .eq('id', id);
+                if (error) console.error('Error updating chat title:', error);
             }
 
             async function loadConversations() {
@@ -1577,7 +1617,7 @@
 
                 conversations = data.map(chat => ({
                     id: chat.id,
-                    title: chat.messages[0]?.content?.substring(0, 30) || 'New chat',
+                    title: chat.title || (chat.messages[0]?.content?.substring(0, 30) || 'New chat'),
                     messages: chat.messages
                 }));
 
@@ -1631,6 +1671,59 @@
                 }
             }
 
+            function renameConversation(id, newTitle) {
+                const conv = conversations.find(c => c.id === id);
+                if (conv) {
+                    conv.title = newTitle;
+                    updateChatTitle(id, newTitle);
+                    renderChatHistory();
+                }
+            }
+
+            // Inline edit handling
+            function startRename(convId, currentTitle, spanElement, actionsElement) {
+                // Hide the title span and actions
+                spanElement.style.display = 'none';
+                actionsElement.style.display = 'none';
+                
+                // Create input
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = currentTitle;
+                input.className = 'chat-title-input';
+                input.style.width = '100%';
+                
+                // Insert input after span
+                spanElement.parentNode.insertBefore(input, spanElement.nextSibling);
+                
+                const finishRename = (save) => {
+                    const newTitle = save ? input.value.trim() : currentTitle;
+                    if (save && newTitle && newTitle !== currentTitle) {
+                        renameConversation(convId, newTitle);
+                    }
+                    // Remove input, show span and actions
+                    input.remove();
+                    spanElement.style.display = '';
+                    actionsElement.style.display = '';
+                };
+                
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        finishRename(true);
+                    } else if (e.key === 'Escape') {
+                        finishRename(false);
+                    }
+                });
+                
+                input.addEventListener('blur', () => {
+                    finishRename(true);
+                });
+                
+                input.focus();
+                input.select();
+            }
+
             function renderChatHistory() {
                 chatHistoryDiv.innerHTML = '';
                 const query = searchInput.value.toLowerCase();
@@ -1642,16 +1735,30 @@
                     div.innerHTML = `
                         <i class="fas fa-comment"></i>
                         <span class="chat-title">${conv.title}</span>
-                        <button class="delete-chat-btn" title="Delete chat"><i class="fas fa-trash"></i></button>
+                        <div class="chat-item-actions">
+                            <button class="edit-chat-btn" title="Rename chat"><i class="fas fa-pencil-alt"></i></button>
+                            <button class="delete-chat-btn" title="Delete chat"><i class="fas fa-trash"></i></button>
+                        </div>
                     `;
                     div.addEventListener('click', (e) => {
-                        if (e.target.closest('.delete-chat-btn')) return;
+                        if (e.target.closest('.edit-chat-btn') || e.target.closest('.delete-chat-btn')) return;
                         if (isLoggedIn()) loadConversation(conv.id);
                     });
+                    const editBtn = div.querySelector('.edit-chat-btn');
                     const deleteBtn = div.querySelector('.delete-chat-btn');
+                    const titleSpan = div.querySelector('.chat-title');
+                    const actionsDiv = div.querySelector('.chat-item-actions');
+                    
+                    editBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        startRename(conv.id, conv.title, titleSpan, actionsDiv);
+                    });
+                    
                     deleteBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        if (isLoggedIn()) deleteConversation(conv.id);
+                        if (confirm('Delete this chat?')) {
+                            deleteConversation(conv.id);
+                        }
                     });
                     chatHistoryDiv.appendChild(div);
                 });
@@ -1671,7 +1778,7 @@
                     if (session) {
                         updateLoginUI();
                     } else {
-                        updateLoginUI(); // shows login form
+                        updateLoginUI(); // shows login form via updateLoginUI
                     }
                 });
 
@@ -2318,6 +2425,7 @@
                 saveConversations();
                 if (conv.messages.length === 1 && msg.role === 'user') {
                     conv.title = msg.content.substring(0, 30) + (msg.content.length > 30 ? '…' : '');
+                    updateChatTitle(conv.id, conv.title);
                     renderChatHistory();
                 }
             }
