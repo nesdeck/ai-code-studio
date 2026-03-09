@@ -1566,13 +1566,22 @@
                 const conv = conversations.find(c => c.id === currentConversationId);
                 if (!conv) return;
 
-                // Ensure currentConversationId is a string before using startsWith
+                // If already saving a temporary conversation, skip to avoid duplicates
+                if (conv._saving) return;
+
+                // If this is a temporary conversation (not yet saved), set saving flag
+                if (currentConversationId && typeof currentConversationId === 'string' && currentConversationId.startsWith('conv_')) {
+                    conv._saving = true;
+                }
+
                 if (currentConversationId && typeof currentConversationId === 'string' && !currentConversationId.startsWith('conv_')) {
+                    // Update existing chat
                     await supabase
                         .from('chats')
                         .update({ messages: conv.messages, title: conv.title })
                         .eq('id', currentConversationId);
                 } else {
+                    // Insert new chat
                     const { data, error } = await supabase
                         .from('chats')
                         .insert({
@@ -1584,8 +1593,10 @@
                         .single();
 
                     if (!error) {
+                        // Update the conversation id and remove temporary flag
                         currentConversationId = data.id;
                         conv.id = data.id;
+                        delete conv._saving;
                     }
                 }
             }
@@ -2422,7 +2433,7 @@
                     conv = createNewConversation();
                 }
                 conv.messages.push(msg);
-                saveConversations();
+                saveConversations(); // fire and forget, but with duplicate protection
                 if (conv.messages.length === 1 && msg.role === 'user') {
                     conv.title = msg.content.substring(0, 30) + (msg.content.length > 30 ? '…' : '');
                     updateChatTitle(conv.id, conv.title);
