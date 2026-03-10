@@ -2230,7 +2230,7 @@
                 setTimeout(() => { downloadStatus.textContent = ''; }, 3000);
             }
 
-            // ----- CHAT (real AI call with full history) -----
+            // ----- CHAT (real AI call with full history as combined prompt) -----
             async function sendMessage() {
                 if (!isLoggedIn()) {
                     showLoginForm();
@@ -2298,12 +2298,14 @@
                     }
                 }
 
-                // Build messages array for API: system prompt + conversation history + new user message
-                const messages = [
-                    { role: 'system', content: SYSTEM_PROMPT },
-                    ...conv.messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
-                    { role: 'user', content: finalUserContent }
-                ];
+                // Build conversation history as a single prompt string (system prompt + history + new message)
+                let historyString = SYSTEM_PROMPT + "\n\n";
+                for (const msg of conv.messages) {
+                    historyString += (msg.role === 'user' ? 'User: ' : 'Assistant: ') + msg.content + "\n\n";
+                }
+                historyString += 'User: ' + finalUserContent;
+
+                const fullPrompt = historyString;
 
                 if (!await deductCredits(requiredCredits)) return;
 
@@ -2320,10 +2322,10 @@
                 updateAttachmentPreview();
                 scrollToBottom();
 
-                await getAIResponse(messages, selectedOption.textContent);
+                await getAIResponse(fullPrompt, selectedOption.textContent);
             }
 
-            async function getAIResponse(messages, modelName) {
+            async function getAIResponse(prompt, modelName) {
                 showTypingIndicator();
 
                 try {
@@ -2333,7 +2335,7 @@
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                            messages: messages,  // send full message history
+                            prompt: prompt,  // send combined prompt
                             model: 'deepseek-chat'
                         })
                     });
