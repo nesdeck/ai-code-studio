@@ -1566,39 +1566,14 @@
                 const conv = conversations.find(c => c.id === currentConversationId);
                 if (!conv) return;
 
-                // If already saving a temporary conversation, skip to avoid duplicates
-                if (conv._saving) return;
-
-                // If this is a temporary conversation (not yet saved), set saving flag
-                if (currentConversationId && typeof currentConversationId === 'string' && currentConversationId.startsWith('conv_')) {
-                    conv._saving = true;
-                }
-
                 if (currentConversationId && typeof currentConversationId === 'string' && !currentConversationId.startsWith('conv_')) {
                     // Update existing chat
                     await supabase
                         .from('chats')
                         .update({ messages: conv.messages, title: conv.title })
                         .eq('id', currentConversationId);
-                } else {
-                    // Insert new chat
-                    const { data, error } = await supabase
-                        .from('chats')
-                        .insert({
-                            user_id: user.id,
-                            messages: conv.messages,
-                            title: conv.title
-                        })
-                        .select()
-                        .single();
-
-                    if (!error) {
-                        // Update the conversation id and remove temporary flag
-                        currentConversationId = data.id;
-                        conv.id = data.id;
-                        delete conv._saving;
-                    }
                 }
+                // Note: Temporary conversations are handled in sendMessage, so they never reach here.
             }
 
             // Update chat title in DB
@@ -2250,6 +2225,42 @@
                 const text = messageInput.value.trim();
                 if (!text && attachments.length === 0) return;
 
+                // Ensure we have a conversation
+                let conv = conversations.find(c => c.id === currentConversationId);
+                if (!conv) {
+                    conv = createNewConversation();
+                    currentConversationId = conv.id;
+                }
+
+                // If this is a temporary conversation (not yet saved), create it in the database now
+                if (currentConversationId.startsWith('conv_')) {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (!user) return;
+                    const { data, error } = await supabase
+                        .from('chats')
+                        .insert({
+                            user_id: user.id,
+                            messages: [], // will be added after
+                            title: conv.title
+                        })
+                        .select()
+                        .single();
+                    if (error) {
+                        console.error('Error creating chat:', error);
+                        return;
+                    }
+                    // Update the conversation id
+                    const oldId = currentConversationId;
+                    currentConversationId = data.id;
+                    conv.id = data.id;
+                    // Update in conversations array
+                    const index = conversations.findIndex(c => c.id === oldId);
+                    if (index !== -1) {
+                        conversations[index] = conv;
+                    }
+                    renderChatHistory();
+                }
+
                 const selectedOption = modelSelect.options[modelSelect.selectedIndex];
                 const requiredCredits = parseInt(selectedOption.dataset.credits, 10);
 
@@ -2433,7 +2444,7 @@
                     conv = createNewConversation();
                 }
                 conv.messages.push(msg);
-                saveConversations(); // fire and forget, but with duplicate protection
+                saveConversations(); // fire and forget, but now only updates, never inserts
                 if (conv.messages.length === 1 && msg.role === 'user') {
                     conv.title = msg.content.substring(0, 30) + (msg.content.length > 30 ? '…' : '');
                     updateChatTitle(conv.id, conv.title);
