@@ -1117,8 +1117,13 @@
             const SUPABASE_ANON_KEY = 'sb_publishable_J8C392wUBcsazsXIcsNaEw_9wB5yqbh';
             const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-            // ----- SYSTEM PROMPT FOR AI RESPONSE FORMATTING (no numbers or symbols before list items) -----
+            // ----- UPDATED SYSTEM PROMPT FOR AI RESPONSE FORMATTING -----
             const SYSTEM_PROMPT = `You are an AI assistant. Follow these formatting rules strictly:
+
+- Headlines should always use the same size (e.g., use ## for all subheadlines, never mix # and ## inconsistently).
+- After every block of text (paragraph, code block, list, etc.), insert an empty line before the next block starts.
+- When asked to fix or debug code, always reply with both the relevant code snippets and the full rewritten code.
+- When asked for analysis of code, reply with snippets and explanatory text.
 - Respond in plain text. Do not use any special characters like dashes (-), asterisks (*), or numbers (like 1., 2.) before list items.
 - For lists, use plain text without any leading symbols or numbers (e.g., just write "Item" on a new line, not "- Item" or "1. Item").
 - Only use Markdown for headlines: # for main headline, ## for subheadline, etc.
@@ -1639,9 +1644,22 @@
                 renderChatHistory();
             }
 
-            function deleteConversation(id) {
+            // Fixed deleteConversation: now async and waits for Supabase delete
+            async function deleteConversation(id) {
                 const index = conversations.findIndex(c => c.id === id);
                 if (index === -1) return;
+
+                // If it's a permanent chat, delete from Supabase first
+                if (id && typeof id === 'string' && !id.startsWith('conv_')) {
+                    const { error } = await supabase.from('chats').delete().eq('id', id);
+                    if (error) {
+                        console.error('Error deleting chat from Supabase:', error);
+                        alert('Failed to delete chat. Please try again.');
+                        return; // don't remove from local state if delete failed
+                    }
+                }
+
+                // Remove from local array
                 conversations.splice(index, 1);
                 if (id === currentConversationId) {
                     if (conversations.length > 0) {
@@ -1652,9 +1670,6 @@
                     }
                 }
                 renderChatHistory();
-                if (id && typeof id === 'string' && !id.startsWith('conv_')) {
-                    supabase.from('chats').delete().eq('id', id);
-                }
             }
 
             function renameConversation(id, newTitle) {
@@ -2215,7 +2230,7 @@
                 setTimeout(() => { downloadStatus.textContent = ''; }, 3000);
             }
 
-            // ----- CHAT (real AI call to third-party-ai-api) -----
+            // ----- CHAT (real AI call with full history) -----
             async function sendMessage() {
                 if (!isLoggedIn()) {
                     showLoginForm();
@@ -2265,14 +2280,14 @@
                 const requiredCredits = parseInt(selectedOption.dataset.credits, 10);
 
                 // Read attachments first, if any
-                let finalText = text;
+                let finalUserContent = text;
                 if (attachments.length > 0) {
                     try {
                         const fileContents = await readFilesAsText(attachments);
                         const attachmentText = fileContents.map(f => 
                             `\n--- Attachment: ${f.name} ---\n${f.content}\n--- End of ${f.name} ---`
                         ).join('\n');
-                        finalText = text + '\n' + attachmentText;
+                        finalUserContent = text + '\n' + attachmentText;
                     } catch (error) {
                         console.error('Error reading files:', error);
                         const errorDiv = document.createElement('div');
@@ -2283,8 +2298,12 @@
                     }
                 }
 
-                // Prepend the system prompt to enforce formatting rules (no numbers or symbols before list items)
-                const fullPrompt = SYSTEM_PROMPT + "\n\nUser message:\n" + finalText;
+                // Build messages array for API: system prompt + conversation history + new user message
+                const messages = [
+                    { role: 'system', content: SYSTEM_PROMPT },
+                    ...conv.messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
+                    { role: 'user', content: finalUserContent }
+                ];
 
                 if (!await deductCredits(requiredCredits)) return;
 
@@ -2301,10 +2320,10 @@
                 updateAttachmentPreview();
                 scrollToBottom();
 
-                await getAIResponse(fullPrompt, selectedOption.textContent);
+                await getAIResponse(messages, selectedOption.textContent);
             }
 
-            async function getAIResponse(prompt, modelName) {
+            async function getAIResponse(messages, modelName) {
                 showTypingIndicator();
 
                 try {
@@ -2314,7 +2333,7 @@
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                            prompt: prompt,
+                            messages: messages,  // send full message history
                             model: 'deepseek-chat'
                         })
                     });
