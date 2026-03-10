@@ -6,17 +6,17 @@
     <title>AI Chat · Code Studio</title>
     <!-- Font Awesome (icons) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- CodeMirror (editor) - core first, then modes -->
+    <!-- CodeMirror (editor) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <!-- Additional CodeMirror modes for proper language support -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>   <!-- for Java, C, C++ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script> <!-- Python support -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>      <!-- XML -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script> <!-- HTML -->
     <!-- Highlight.js (for code blocks) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <!-- Marked (markdown parser) -->
@@ -70,9 +70,6 @@
         .delete-chat-btn {
             color: #ff6b6b;
         }
-        .edit-chat-btn {
-            color: #4db8ff;
-        }
 
         /* ----- ACCENT COLOR (CSS variable, default Capri) ----- */
         :root {
@@ -83,7 +80,6 @@
         .logo i,
         .send-btn, .attach-btn,
         .delete-chat-btn:hover,
-        .edit-chat-btn:hover,
         .message.ai .message-text,
         #login-btn.logged-in i,
         .code-block-header button i,
@@ -200,10 +196,6 @@
         .sidebar.collapsed .sidebar-bottom .color-picker-btn {
             margin: 0 auto;
         }
-        /* Hide edit/delete buttons when sidebar collapsed */
-        .sidebar.collapsed .chat-history-item .chat-item-actions {
-            display: none;
-        }
         .sidebar .collapse-btn {
             position: absolute;
             top: 50%;
@@ -297,46 +289,25 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .chat-item-actions {
+        .delete-chat-btn {
             position: absolute;
             right: 8px;
             top: 50%;
             transform: translateY(-50%);
-            display: flex;
-            gap: 4px;
-            opacity: 0;
-            transition: opacity 0.2s;
-            background-color: transparent;
-            padding-left: 8px;
-        }
-        .chat-history-item:hover .chat-item-actions {
-            opacity: 1;
-        }
-        .edit-chat-btn, .delete-chat-btn {
             background: none;
             border: none;
             cursor: pointer;
             font-size: 1rem;
+            opacity: 0;
+            transition: opacity 0.2s;
             padding: 4px;
             border-radius: 4px;
-            transition: background 0.2s;
         }
-        .edit-chat-btn:hover {
-            background-color: rgba(255,255,255,0.2);
+        .chat-history-item:hover .delete-chat-btn {
+            opacity: 1;
         }
         .delete-chat-btn:hover {
             background-color: rgba(255,255,255,0.2);
-        }
-        /* Inline edit input */
-        .chat-title-input {
-            background: #3a3a3a;
-            border: 1px solid var(--accent-color);
-            color: white;
-            font-size: 0.9rem;
-            padding: 2px 4px;
-            border-radius: 4px;
-            width: 100%;
-            outline: none;
         }
         .sidebar-bottom {
             padding: 16px;
@@ -1108,6 +1079,8 @@
         </div>
     </div>
 
+    <!-- SCRIPTS (CodeMirror modes already loaded in head) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <!-- Highlight.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script>
@@ -1117,20 +1090,6 @@
             const SUPABASE_ANON_KEY = 'sb_publishable_J8C392wUBcsazsXIcsNaEw_9wB5yqbh';
             const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-            // ----- UPDATED SYSTEM PROMPT FOR AI RESPONSE FORMATTING -----
-            const SYSTEM_PROMPT = `You are an AI assistant. Follow these formatting rules strictly:
-
-- Headlines should always use the same size (e.g., use ## for all subheadlines, never mix # and ## inconsistently).
-- After every block of text (paragraph, code block, list, etc.), insert an empty line before the next block starts.
-- When asked to fix or debug code, always reply with both the relevant code snippets and the full rewritten code.
-- When asked for analysis of code, reply with snippets and explanatory text.
-- Respond in plain text. Do not use any special characters like dashes (-), asterisks (*), or numbers (like 1., 2.) before list items.
-- For lists, use plain text without any leading symbols or numbers (e.g., just write "Item" on a new line, not "- Item" or "1. Item").
-- Only use Markdown for headlines: # for main headline, ## for subheadline, etc.
-- For code blocks, wrap them with triple backticks and specify the language (e.g., \`\`\`python ... \`\`\`).
-- Do not use any other Markdown formatting like bold, italics, or inline code unless absolutely necessary, but prefer plain text.
-- Your response should be clean and easy to read without extraneous punctuation.`;
-
             // ----- HELPER FUNCTIONS FOR LANGUAGE MAPPING -----
             function getLanguageFromCodeElement(codeEl) {
                 if (!codeEl) return null;
@@ -1138,8 +1097,8 @@
                 for (let cls of classList) {
                     if (cls.startsWith('language-')) {
                         return cls.substring('language-'.length);
-                    }
                 }
+            }
                 return null;
             }
 
@@ -1195,19 +1154,6 @@
                     shell: 'shell'
                 };
                 return map[lang] || 'javascript';
-            }
-
-            // ----- FILE READING HELPER (for attachments) -----
-            function readFilesAsText(files) {
-                const readers = Array.from(files).map(file => {
-                    return new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = () => resolve({ name: file.name, content: reader.result });
-                        reader.onerror = () => reject(reader.error);
-                        reader.readAsText(file);
-                    });
-                });
-                return Promise.all(readers);
             }
 
             // ----- STATE -----
@@ -1468,7 +1414,7 @@
                         conversations = [];
                         currentConversationId = null;
                         chatMessagesDiv.innerHTML = '';
-                        showLoginForm(); // Show login form automatically when logged out
+                        showLoginForm();
                     }
                 });
             }
@@ -1563,7 +1509,7 @@
                 showLoginForm();
             }
 
-            // ----- CONVERSATIONS (with title column) -----
+            // ----- CONVERSATIONS -----
             async function saveConversations() {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
@@ -1571,24 +1517,27 @@
                 const conv = conversations.find(c => c.id === currentConversationId);
                 if (!conv) return;
 
+                // Ensure currentConversationId is a string before using startsWith
                 if (currentConversationId && typeof currentConversationId === 'string' && !currentConversationId.startsWith('conv_')) {
-                    // Update existing chat
                     await supabase
                         .from('chats')
-                        .update({ messages: conv.messages, title: conv.title })
+                        .update({ messages: conv.messages })
                         .eq('id', currentConversationId);
-                }
-                // Note: Temporary conversations are handled in sendMessage, so they never reach here.
-            }
+                } else {
+                    const { data, error } = await supabase
+                        .from('chats')
+                        .insert({
+                            user_id: user.id,
+                            messages: conv.messages
+                        })
+                        .select()
+                        .single();
 
-            // Update chat title in DB
-            async function updateChatTitle(id, newTitle) {
-                if (id.startsWith('conv_')) return; // temporary chat, not saved yet
-                const { error } = await supabase
-                    .from('chats')
-                    .update({ title: newTitle })
-                    .eq('id', id);
-                if (error) console.error('Error updating chat title:', error);
+                    if (!error) {
+                        currentConversationId = data.id;
+                        conv.id = data.id;
+                    }
+                }
             }
 
             async function loadConversations() {
@@ -1608,7 +1557,7 @@
 
                 conversations = data.map(chat => ({
                     id: chat.id,
-                    title: chat.title || (chat.messages[0]?.content?.substring(0, 30) || 'New chat'),
+                    title: chat.messages[0]?.content?.substring(0, 30) || 'New chat',
                     messages: chat.messages
                 }));
 
@@ -1644,22 +1593,9 @@
                 renderChatHistory();
             }
 
-            // Fixed deleteConversation: now async and waits for Supabase delete
-            async function deleteConversation(id) {
+            function deleteConversation(id) {
                 const index = conversations.findIndex(c => c.id === id);
                 if (index === -1) return;
-
-                // If it's a permanent chat, delete from Supabase first
-                if (id && typeof id === 'string' && !id.startsWith('conv_')) {
-                    const { error } = await supabase.from('chats').delete().eq('id', id);
-                    if (error) {
-                        console.error('Error deleting chat from Supabase:', error);
-                        alert('Failed to delete chat. Please try again.');
-                        return; // don't remove from local state if delete failed
-                    }
-                }
-
-                // Remove from local array
                 conversations.splice(index, 1);
                 if (id === currentConversationId) {
                     if (conversations.length > 0) {
@@ -1670,59 +1606,9 @@
                     }
                 }
                 renderChatHistory();
-            }
-
-            function renameConversation(id, newTitle) {
-                const conv = conversations.find(c => c.id === id);
-                if (conv) {
-                    conv.title = newTitle;
-                    updateChatTitle(id, newTitle);
-                    renderChatHistory();
+                if (id && typeof id === 'string' && !id.startsWith('conv_')) {
+                    supabase.from('chats').delete().eq('id', id);
                 }
-            }
-
-            // Inline edit handling
-            function startRename(convId, currentTitle, spanElement, actionsElement) {
-                // Hide the title span and actions
-                spanElement.style.display = 'none';
-                actionsElement.style.display = 'none';
-                
-                // Create input
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.value = currentTitle;
-                input.className = 'chat-title-input';
-                input.style.width = '100%';
-                
-                // Insert input after span
-                spanElement.parentNode.insertBefore(input, spanElement.nextSibling);
-                
-                const finishRename = (save) => {
-                    const newTitle = save ? input.value.trim() : currentTitle;
-                    if (save && newTitle && newTitle !== currentTitle) {
-                        renameConversation(convId, newTitle);
-                    }
-                    // Remove input, show span and actions
-                    input.remove();
-                    spanElement.style.display = '';
-                    actionsElement.style.display = '';
-                };
-                
-                input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        finishRename(true);
-                    } else if (e.key === 'Escape') {
-                        finishRename(false);
-                    }
-                });
-                
-                input.addEventListener('blur', () => {
-                    finishRename(true);
-                });
-                
-                input.focus();
-                input.select();
             }
 
             function renderChatHistory() {
@@ -1736,30 +1622,16 @@
                     div.innerHTML = `
                         <i class="fas fa-comment"></i>
                         <span class="chat-title">${conv.title}</span>
-                        <div class="chat-item-actions">
-                            <button class="edit-chat-btn" title="Rename chat"><i class="fas fa-pencil-alt"></i></button>
-                            <button class="delete-chat-btn" title="Delete chat"><i class="fas fa-trash"></i></button>
-                        </div>
+                        <button class="delete-chat-btn" title="Delete chat"><i class="fas fa-trash"></i></button>
                     `;
                     div.addEventListener('click', (e) => {
-                        if (e.target.closest('.edit-chat-btn') || e.target.closest('.delete-chat-btn')) return;
+                        if (e.target.closest('.delete-chat-btn')) return;
                         if (isLoggedIn()) loadConversation(conv.id);
                     });
-                    const editBtn = div.querySelector('.edit-chat-btn');
                     const deleteBtn = div.querySelector('.delete-chat-btn');
-                    const titleSpan = div.querySelector('.chat-title');
-                    const actionsDiv = div.querySelector('.chat-item-actions');
-                    
-                    editBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        startRename(conv.id, conv.title, titleSpan, actionsDiv);
-                    });
-                    
                     deleteBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        if (confirm('Delete this chat?')) {
-                            deleteConversation(conv.id);
-                        }
+                        if (isLoggedIn()) deleteConversation(conv.id);
                     });
                     chatHistoryDiv.appendChild(div);
                 });
@@ -1779,7 +1651,7 @@
                     if (session) {
                         updateLoginUI();
                     } else {
-                        updateLoginUI(); // shows login form via updateLoginUI
+                        updateLoginUI(); // shows login form
                     }
                 });
 
@@ -1950,8 +1822,6 @@
                             const lang = getLanguageFromCodeElement(codeElement);
                             const mode = getCodeMirrorMode(lang);
                             codeEditor.setOption('mode', mode);
-                            // Force a refresh to ensure highlighting applies
-                            codeEditor.refresh();
                             codeEditor.focus();
                         }
                     }
@@ -2230,7 +2100,7 @@
                 setTimeout(() => { downloadStatus.textContent = ''; }, 3000);
             }
 
-            // ----- CHAT (real AI call with full history as combined prompt) -----
+            // ----- CHAT (real AI call to third-party-ai-api) -----
             async function sendMessage() {
                 if (!isLoggedIn()) {
                     showLoginForm();
@@ -2240,79 +2110,14 @@
                 const text = messageInput.value.trim();
                 if (!text && attachments.length === 0) return;
 
-                // Ensure we have a conversation
-                let conv = conversations.find(c => c.id === currentConversationId);
-                if (!conv) {
-                    conv = createNewConversation();
-                    currentConversationId = conv.id;
-                }
-
-                // If this is a temporary conversation (not yet saved), create it in the database now
-                // IMPORTANT: check that currentConversationId exists before calling startsWith
-                if (currentConversationId && currentConversationId.startsWith('conv_')) {
-                    const { data: { user } } = await supabase.auth.getUser();
-                    if (!user) return;
-                    const { data, error } = await supabase
-                        .from('chats')
-                        .insert({
-                            user_id: user.id,
-                            messages: [], // will be added after
-                            title: conv.title
-                        })
-                        .select()
-                        .single();
-                    if (error) {
-                        console.error('Error creating chat:', error);
-                        return;
-                    }
-                    // Update the conversation id
-                    const oldId = currentConversationId;
-                    currentConversationId = data.id;
-                    conv.id = data.id;
-                    // Update in conversations array
-                    const index = conversations.findIndex(c => c.id === oldId);
-                    if (index !== -1) {
-                        conversations[index] = conv;
-                    }
-                    renderChatHistory();
-                }
-
                 const selectedOption = modelSelect.options[modelSelect.selectedIndex];
                 const requiredCredits = parseInt(selectedOption.dataset.credits, 10);
-
-                // Read attachments first, if any
-                let finalUserContent = text;
-                if (attachments.length > 0) {
-                    try {
-                        const fileContents = await readFilesAsText(attachments);
-                        const attachmentText = fileContents.map(f => 
-                            `\n--- Attachment: ${f.name} ---\n${f.content}\n--- End of ${f.name} ---`
-                        ).join('\n');
-                        finalUserContent = text + '\n' + attachmentText;
-                    } catch (error) {
-                        console.error('Error reading files:', error);
-                        const errorDiv = document.createElement('div');
-                        errorDiv.className = 'error-message';
-                        errorDiv.textContent = 'Could not read one or more attachments. They were not sent.';
-                        chatMessagesDiv.appendChild(errorDiv);
-                        setTimeout(() => errorDiv.remove(), 3000);
-                    }
-                }
-
-                // Build conversation history as a single prompt string (system prompt + history + new message)
-                let historyString = SYSTEM_PROMPT + "\n\n";
-                for (const msg of conv.messages) {
-                    historyString += (msg.role === 'user' ? 'User: ' : 'Assistant: ') + msg.content + "\n\n";
-                }
-                historyString += 'User: ' + finalUserContent;
-
-                const fullPrompt = historyString;
 
                 if (!await deductCredits(requiredCredits)) return;
 
                 const userMsg = {
                     role: 'user',
-                    content: text,  // keep original text for display (attachments shown as chips)
+                    content: text,
                     timestamp: new Date().toISOString(),
                     attachments: [...attachments]
                 };
@@ -2323,7 +2128,7 @@
                 updateAttachmentPreview();
                 scrollToBottom();
 
-                await getAIResponse(fullPrompt, selectedOption.textContent);
+                await getAIResponse(text, selectedOption.textContent);
             }
 
             async function getAIResponse(prompt, modelName) {
@@ -2336,7 +2141,7 @@
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                            prompt: prompt,  // send combined prompt
+                            prompt: prompt,
                             model: 'deepseek-chat'
                         })
                     });
@@ -2466,10 +2271,9 @@
                     conv = createNewConversation();
                 }
                 conv.messages.push(msg);
-                saveConversations(); // fire and forget, but now only updates, never inserts
+                saveConversations();
                 if (conv.messages.length === 1 && msg.role === 'user') {
                     conv.title = msg.content.substring(0, 30) + (msg.content.length > 30 ? '…' : '');
-                    updateChatTitle(conv.id, conv.title);
                     renderChatHistory();
                 }
             }
