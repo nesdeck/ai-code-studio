@@ -2248,7 +2248,8 @@
                 }
 
                 // If this is a temporary conversation (not yet saved), create it in the database now
-                if (currentConversationId.startsWith('conv_')) {
+                // IMPORTANT: check that currentConversationId exists before calling startsWith
+                if (currentConversationId && currentConversationId.startsWith('conv_')) {
                     const { data: { user } } = await supabase.auth.getUser();
                     if (!user) return;
                     const { data, error } = await supabase
